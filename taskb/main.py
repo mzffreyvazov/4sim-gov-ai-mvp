@@ -21,7 +21,7 @@ import chardet
 
 # Load env vars
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY_NEW")
 model = "gemini-2.0-flash"
 
 app = FastAPI(title="Task B: Data Viz & Analytics")
@@ -66,28 +66,50 @@ async def summarize(file: UploadFile = File(...)):
     try:
         file_content = await file.read()
         df = read_file_with_encoding_detection(file_content, file.filename)
-        
+
+
+        # Prepare detailed string representations
+        df_head_str = df.head(20).to_string()
+        df_shape_str = str(df.shape)
+        df_columns_str = str(df.columns.tolist())
+        df_description_str = df.describe(include='all').to_string()
+        buf = io.StringIO()
+        df.info(buf=buf)
+        df_info_str = buf.getvalue()
+
+        # Add new fields to summary
         summary = {
             "filename": file.filename,
             "rows": len(df),
             "cols": len(df.columns),
             "dtypes": df.dtypes.astype(str).to_dict(),
-            "head": df.head(3).to_dict(orient="records")
+            "head": df.head(3).to_dict(orient="records"),
+            "head_str": df_head_str,
+            "shape": df_shape_str,
+            "columns": df_columns_str,
+            "description": df_description_str,
+            "info": df_info_str
         }
-        
+
         llm = ChatGoogleGenerativeAI(model=model, temperature=0.1, api_key=GOOGLE_API_KEY)
-        
+
+        # Refined prompt for more detailed summarization (up to 7 sentences)
         prompt = PromptTemplate(
             input_variables=["schema", "stats"],
-            template="""You are a data analyst. Given this schema: {schema}
-            and these basic stats: {stats}
-            Write a concise, 3-sentence summary of the dataset's structure and potential focus.
-            Also suggest 2-3 potential areas of analysis or insights that could be derived from this data.
+            template="""
+            You are an expert data analyst. Given the following dataset schema and statistics, provide a detailed summary (up to 7 sentences) covering:
+            - The structure and main characteristics of the dataset (columns, types, shape, sample rows)
+            - Notable patterns, distributions, or anomalies you observe from the head, description, and info
+            - Potential focus areas or questions this dataset could help answer
+            - 2-3 specific suggestions for further analysis or insights that could be derived
+
+            Schema: {schema}
+            Stats: {stats}
             """
         )
         chain = prompt | llm | StrOutputParser()
         narrative = chain.invoke({"schema": list(df.columns), "stats": summary})
-        
+
         return {"summary": summary, "narrative": narrative}
     
     except Exception as e:
