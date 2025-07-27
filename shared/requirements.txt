@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+langchain
+openai
+pandas
+numpy
+matplotlib
+weasyprint
+pymupdf             # for PDF parsing
+python‑pptx
+chromadb            # or pinecone-client
+python‑dotenv
