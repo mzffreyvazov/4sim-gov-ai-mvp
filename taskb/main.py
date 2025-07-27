@@ -6,6 +6,8 @@ import pandas as pd
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+import matplotlib
+matplotlib.use('Agg') # Use a non-interactive backend for server environments
 import matplotlib.pyplot as plt
 import io
 import base64
@@ -15,108 +17,77 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.fonts import addMapping
 import chardet
 
 # Load env vars
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-model = "gemini-2.0-flash"  # Updated model version
+model = "gemini-2.0-flash"
 
 app = FastAPI(title="Task B: Data Viz & Analytics")
 
 def setup_unicode_fonts():
     """
-    Setup Unicode-capable fonts for ReportLab
+    Registers a Unicode-capable font for ReportLab, falling back to Helvetica.
     """
     try:
-        # Try to register DejaVu Sans font for better Unicode support
-        from reportlab.pdfbase.ttfonts import TTFont
-        from reportlab.pdfbase import pdfmetrics
-        
-        # Try different font paths that might exist on the system
         font_paths = [
             "DejaVuSans.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "C:\\Windows\\Fonts\\Arial.ttf",
             "/System/Library/Fonts/Arial.ttf",
-            "C:\\Windows\\Fonts\\arial.ttf",
         ]
-        
         for font_path in font_paths:
-            try:
+            if os.path.exists(font_path):
                 pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
                 return 'DejaVuSans'
-            except:
-                continue
-        
-        # If no custom font found, return default font
         return 'Helvetica'
-    except:
-        # If anything fails, return default font
+    except Exception:
         return 'Helvetica'
-        
-def read_file_with_encoding_detection(file_content, filename):
+
+def read_file_with_encoding_detection(file_content: bytes, filename: str) -> pd.DataFrame:
     """
-    Read file with automatic encoding detection
+    Reads a file (CSV or Excel) into a pandas DataFrame with auto-detected encoding.
     """
     if filename.endswith(".xlsx"):
         return pd.read_excel(io.BytesIO(file_content))
     else:
-        # Detect encoding for CSV files
-        detected = chardet.detect(file_content)
-        encoding = detected['encoding'] if detected['encoding'] else 'utf-8'
-        
-        # Try multiple encodings in order of preference
-        encodings_to_try = [encoding, 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
-        
-        for enc in encodings_to_try:
-            try:
-                # Decode bytes to string first
-                text_content = file_content.decode(enc)
-                # Then read with pandas
-                return pd.read_csv(io.StringIO(text_content))
-            except (UnicodeDecodeError, UnicodeError):
-                continue
-        
-        # If all encodings fail, try with error handling
+        result = chardet.detect(file_content)
+        encoding = result['encoding'] or 'utf-8'
         try:
-            text_content = file_content.decode('utf-8', errors='replace')
-            return pd.read_csv(io.StringIO(text_content))
-        except Exception as e:
-            raise ValueError(f"Could not read file with any encoding. Error: {str(e)}")
+            return pd.read_csv(io.StringIO(file_content.decode(encoding)))
+        except (UnicodeDecodeError, pd.errors.ParserError):
+            # Fallback to latin-1 if primary encoding fails
+            return pd.read_csv(io.StringIO(file_content.decode('latin-1', errors='replace')))
 
 # 1) Ingest & Summarize
 @app.post("/summarize/")
 async def summarize(file: UploadFile = File(...)):
     try:
-        # Read file content as bytes
         file_content = await file.read()
-        
-        # Use the encoding detection function
         df = read_file_with_encoding_detection(file_content, file.filename)
         
         summary = {
-            "rows": len(df), "cols": len(df.columns),
+            "filename": file.filename,
+            "rows": len(df),
+            "cols": len(df.columns),
             "dtypes": df.dtypes.astype(str).to_dict(),
             "head": df.head(3).to_dict(orient="records")
         }
         
-        # Initialize Gemini with API key
-        llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0.0,
-            api_key=GOOGLE_API_KEY
-        )
+        llm = ChatGoogleGenerativeAI(model=model, temperature=0.1, api_key=GOOGLE_API_KEY)
         
-        # Create modern chain for narrative summary
         prompt = PromptTemplate(
             input_variables=["schema", "stats"],
             template="""You are a data analyst. Given this schema: {schema}
             and these basic stats: {stats}
-            Write a 3‑sentence summary."""
+            Write a concise, 3-sentence summary of the dataset's structure and potential focus.
+            Also suggest 2-3 potential areas of analysis or insights that could be derived from this data.
+            """
         )
         chain = prompt | llm | StrOutputParser()
         narrative = chain.invoke({"schema": list(df.columns), "stats": summary})
+        
         return {"summary": summary, "narrative": narrative}
     
     except Exception as e:
@@ -126,178 +97,116 @@ async def summarize(file: UploadFile = File(...)):
 @app.post("/charts/")
 async def generate_charts(file: UploadFile = File(...)):
     try:
-        # Read file content as bytes
         file_content = await file.read()
-        
-        # Use the encoding detection function
         df = read_file_with_encoding_detection(file_content, file.filename)
         
-        # Initialize Gemini with API key
-        llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0.0,
-            api_key=GOOGLE_API_KEY
-        )
+        llm = ChatGoogleGenerativeAI(model=model, temperature=0.2, api_key=GOOGLE_API_KEY)
 
-        # A) Suggest chart types
-        suggest_prompt = PromptTemplate(
-          input_variables=["columns","summary"],
-          template="""Schema: {columns}
-          Summary: {summary}
-          Suggest the top 3 chart types (bar, line, pie, KPI, etc.) to visualize this data. Explain each choice."""
+        # --- KEY CHANGE 1: Define a new, context-aware prompt for annotations ---
+        ann_prompt = PromptTemplate(
+            input_variables=["chart_type", "chart_data"],
+            template="""You are a helpful data analyst. A {chart_type} chart has been generated.
+            Here is the data used for the chart:
+            ---
+            {chart_data}
+            ---
+            Based *only* on this data, write a 2-3 sentence summary describing the key insight a user should notice from the chart. Focus on the main patterns or distributions revealed by the numbers."""
         )
-        suggest_chain = suggest_prompt | llm | StrOutputParser()
-        suggestions = suggest_chain.invoke({"columns": list(df.columns), "summary": f"{len(df)} rows"})
+        ann_chain = ann_prompt | llm | StrOutputParser()
 
-        # B) Generate each chart + annotation
         chart_images = []
         annotations = []
-        for i, chart_type in enumerate(["bar","line","pie"]):  # stub: parse from suggestions
-            fig, ax = plt.subplots(figsize=(8, 6))
-            
+        charts_to_generate = ["bar", "line", "pie"]
+
+        for chart_type in charts_to_generate:
+            fig, ax = plt.subplots(figsize=(8, 5))
+            chart_data_summary = "No data available." # Default summary
+
             try:
-                if chart_type == "bar" and len(df.columns) > 0:
-                    # Create bar chart from first column
-                    if df.iloc[:, 0].dtype == 'object':
-                        df.iloc[:, 0].value_counts().head(10).plot.bar(ax=ax)
-                        ax.set_title(f"Distribution of {df.columns[0]}")
+                # --- KEY CHANGE 2: Generate chart and extract its data for context ---
+                if chart_type == "bar" and not df.empty:
+                    col_name = df.columns[0]
+                    if pd.api.types.is_numeric_dtype(df[col_name]):
+                        # For numeric data, create a histogram
+                        counts, bins, _ = ax.hist(df[col_name].dropna(), bins=15)
+                        ax.set_title(f"Histogram of {col_name}")
+                        chart_data_summary = f"The chart shows a histogram for the numeric column '{col_name}'. Bin edges are roughly { [round(b, 2) for b in bins] } with corresponding counts { [int(c) for c in counts] }."
                     else:
-                        df.iloc[:, 0].hist(bins=10, ax=ax)
-                        ax.set_title(f"Histogram of {df.columns[0]}")
-                elif chart_type == "line" and len(df.columns) > 1:
-                    # Create line chart if we have numeric data
+                        # For categorical data, create a bar chart
+                        value_counts = df[col_name].value_counts().head(10)
+                        value_counts.plot.bar(ax=ax, rot=45)
+                        ax.set_title(f"Top 10 Distribution for {col_name}")
+                        chart_data_summary = f"The chart shows top 10 value counts for the categorical column '{col_name}'. Data: {value_counts.to_dict()}"
+
+                elif chart_type == "line":
                     numeric_cols = df.select_dtypes(include=['number']).columns
                     if len(numeric_cols) >= 2:
-                        df[numeric_cols[:2]].plot.line(ax=ax)
-                        ax.set_title(f"Line Chart: {numeric_cols[0]} vs {numeric_cols[1]}")
+                        x_col, y_col = numeric_cols[0], numeric_cols[1]
+                        plot_df = df.head(50) # Plot a sample
+                        plot_df.plot.line(x=x_col, y=y_col, ax=ax, grid=True)
+                        ax.set_title(f"{y_col} over {x_col}")
+                        chart_data_summary = f"The chart shows the trend of '{y_col}' against '{x_col}'. The first few data points are: {plot_df[[x_col, y_col]].to_dict(orient='records')}"
                     else:
-                        df.iloc[:, 0].plot.line(ax=ax)
-                        ax.set_title(f"Line Chart: {df.columns[0]}")
-                elif chart_type == "pie" and len(df.columns) > 0:
-                    # Create pie chart from first column
-                    if df.iloc[:, 0].dtype == 'object':
-                        value_counts = df.iloc[:, 0].value_counts().head(5)
-                        ax.pie(value_counts.values, labels=value_counts.index, autopct='%1.1f%%')
-                        ax.set_title(f"Pie Chart: {df.columns[0]}")
-                else:
-                    # Fallback: simple bar chart
-                    if len(df.columns) > 0:
-                        df.iloc[:, 0].value_counts().head(5).plot.bar(ax=ax)
-                        ax.set_title(f"Data Overview: {df.columns[0]}")
-            except Exception as e:
-                # Fallback for any plotting errors
-                ax.text(0.5, 0.5, f"Chart generation failed\n{str(e)}", 
-                       ha='center', va='center', transform=ax.transAxes)
-                ax.set_title(f"Chart Error: {chart_type}")
-            
-            plt.tight_layout()
-            buf = io.BytesIO()
-            plt.savefig(buf, format="png", dpi=150, bbox_inches='tight')
-            buf.seek(0)
-            chart_images.append(buf.getvalue())
-            plt.close(fig)
+                        raise ValueError("Not enough numeric columns for a line chart.")
 
-            ann_prompt = PromptTemplate(
-                input_variables=["chart_type","insight"],
-                template="""Write 2‑3 sentences in English describing this {chart_type} showing {insight}."""
-            )
-            ann_chain = ann_prompt | llm | StrOutputParser()
-            eng = ann_chain.invoke({"chart_type": chart_type, "insight": "key patterns"})
-            
-            # translate to Azerbaijani
-            trans = llm.invoke(f"Translate into:\n\n{eng}")
-            # Extract content from response
-            trans_text = trans.content if hasattr(trans, 'content') else str(trans)
-            annotations.append(eng)
+                elif chart_type == "pie":
+                    categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+                    if not categorical_cols.empty:
+                        col_name = categorical_cols[0]
+                        value_counts = df[col_name].value_counts().head(6)
+                        ax.pie(value_counts, labels=value_counts.index, autopct='%1.1f%%', startangle=90)
+                        ax.set_title(f"Top 6 Distribution in {col_name}")
+                        ax.set_ylabel('') # Remove y-axis label for pie charts
+                        chart_data_summary = f"The chart shows a percentage distribution for the top 6 categories of '{col_name}'. Data: {value_counts.to_dict()}"
+                    else:
+                        raise ValueError("No suitable categorical column found for a pie chart.")
+
+                else:
+                    plt.close(fig)
+                    continue
+                
+                # --- If chart creation was successful, save it and generate annotation ---
+                plt.tight_layout()
+                buf = io.BytesIO()
+                plt.savefig(buf, format="png", dpi=150)
+                buf.seek(0)
+                chart_images.append(buf) # Keep buffer in memory
+                plt.close(fig)
+
+                # --- KEY CHANGE 3: Invoke the LLM with the specific data summary ---
+                annotation = ann_chain.invoke({"chart_type": chart_type, "chart_data": chart_data_summary})
+                annotations.append(annotation)
+
+            except Exception as e:
+                plt.close(fig) # Ensure plot is closed on error
+                print(f"Skipping chart '{chart_type}': {e}") # Log error for debugging
 
         # C) Assemble PDF using ReportLab with Unicode support
         output_filename = "dashboard.pdf"
-        
-        # Setup Unicode fonts
         unicode_font = setup_unicode_fonts()
         
-        # Create document with UTF-8 support
-        doc = SimpleDocTemplate(
-            output_filename, 
-            pagesize=A4,
-            encoding='utf-8'
-        )
-        
-        # Get styles and create Unicode-compatible styles
+        doc = SimpleDocTemplate(output_filename, pagesize=A4)
         styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('CustomTitle', parent=styles['h1'], fontName=unicode_font, alignment=1)
+        normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontName=unicode_font, spaceAfter=12)
         
-        # Create custom styles with Unicode font
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Title'],
-            fontName=unicode_font,
-            encoding='utf-8'
-        )
+        story = [Paragraph("Data Analysis Dashboard", title_style), Spacer(1, 0.25 * inch)]
         
-        normal_style = ParagraphStyle(
-            'CustomNormal',
-            parent=styles['Normal'],
-            fontName=unicode_font,
-            encoding='utf-8',
-            wordWrap='CJK'  # Better wrapping for international text
-        )
-        
-        story = []
-        temp_files = []  # Keep track of temp files
-        
-        # Add title
-        title = Paragraph("Data Analysis Dashboard", title_style)
-        story.append(title)
-        story.append(Spacer(1, 20))
-        
-        # Add charts and annotations
-        for i, (img_data, text) in enumerate(zip(chart_images, annotations)):
-            # Create absolute path for temporary file
-            temp_img_path = os.path.abspath(f"temp_chart_{i}.png")
-            temp_files.append(temp_img_path)
-            
-            # Save chart image to temporary file
-            with open(temp_img_path, "wb") as f:
-                f.write(img_data)
-            
-            # Create image from BytesIO instead of file path
-            img_buffer = io.BytesIO(img_data)
-            img = Image(img_buffer, width=5*inch, height=3*inch)
+        # --- IMPROVEMENT: Zip the successful charts and annotations to build the story ---
+        for img_buffer, text in zip(chart_images, annotations):
+            # Pass the in-memory buffer directly to the Image object
+            img = Image(img_buffer, width=6*inch, height=3.75*inch, kind='proportional')
             story.append(img)
-            story.append(Spacer(1, 10))
-            
-            # Add annotation text with proper Unicode handling
-            try:
-                # Ensure text is properly encoded
-                if isinstance(text, bytes):
-                    text = text.decode('utf-8', errors='replace')
-                
-                # Clean text for ReportLab
-                cleaned_text = text.replace('\x00', '').strip()
-                
-                annotation = Paragraph(cleaned_text, normal_style)
-                story.append(annotation)
-            except Exception as e:
-                # Fallback with basic text
-                fallback_text = f"Chart {i+1} annotation (encoding issue: {str(e)})"
-                annotation = Paragraph(fallback_text, normal_style)
-                story.append(annotation)
-            
-            story.append(Spacer(1, 20))
-        
-        # Build PDF
-        doc.build(story)
-        
-        # Clean up temporary files after PDF is built
-        for temp_file in temp_files:
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass  # Ignore cleanup errors
+            story.append(Spacer(1, 0.1 * inch))
+            story.append(Paragraph(text.replace("\n", "<br/>"), normal_style))
+            story.append(Spacer(1, 0.25 * inch))
 
-        # Return the PDF file
+        if not annotations:
+            story.append(Paragraph("Could not generate any charts from the provided data.", normal_style))
+        
+        doc.build(story)
+
         return FileResponse(output_filename, media_type="application/pdf", filename="dashboard.pdf")
     
     except Exception as e:
-        return {"error": f"Failed to generate charts: {str(e)}"}        
+        return {"error": f"Failed to generate dashboard: {str(e)}"}
