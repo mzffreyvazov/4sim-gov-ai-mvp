@@ -139,15 +139,17 @@ async def generate_dashboard(file: UploadFile = File(...)):
         2. Clean data if needed (for numeric operations):
            - `df_copy['column'] = pd.to_numeric(df_copy['column'], errors='coerce')`
            - `df_copy.dropna(subset=['column'], inplace=True)`
-        3. Create figure: `fig, ax = plt.subplots(figsize=(10, 6))`
-        4. Plot based on chart type:
+        3. Validate data exists after cleaning (must have at least 1 row)
+        4. Create figure: `fig, ax = plt.subplots(figsize=(10, 6))`
+        5. Plot based on chart type:
            - Bar: `df_copy['column'].value_counts().plot(kind='bar', ax=ax)`
            - Histogram: `ax.hist(df_copy['column'], bins=20)`
            - Scatter: `ax.scatter(df_copy['x_col'], df_copy['y_col'])`
            - Pie: `df_copy['column'].value_counts().plot(kind='pie', ax=ax)`
-        5. Set title: `ax.set_title('{title}')`
-        6. Save to buffer: `fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')`
-        7. Close: `plt.close(fig)`
+        6. Set title: `ax.set_title('{title}')`
+        7. Set axis labels if applicable
+        8. Save to buffer: `fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')`
+        9. Close: `plt.close(fig)`
         
         **CRITICAL**: 
         - NO function definitions (def)
@@ -155,14 +157,16 @@ async def generate_dashboard(file: UploadFile = File(...)):
         - NO comments
         - DIRECT executable statements only
         - MUST save to img_buffer
+        - Handle empty data gracefully
         
-        **EXAMPLE**:
+        **EXAMPLE WITH DATA VALIDATION**:
         df_copy = df.copy()
-        fig, ax = plt.subplots(figsize=(10, 6))
-        df_copy['Company'].value_counts().plot(kind='bar', ax=ax)
-        ax.set_title('Company Distribution')
-        fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
-        plt.close(fig)
+        if len(df_copy) > 0:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            df_copy['Company'].value_counts().plot(kind='bar', ax=ax)
+            ax.set_title('Company Distribution')
+            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
+            plt.close(fig)
         """
     )
     code_gen_chain = code_gen_prompt | llm | StrOutputParser()
@@ -186,12 +190,35 @@ async def generate_dashboard(file: UploadFile = File(...)):
                 print(f"❌ Generated code contains function definitions, skipping chart '{suggestion.get('title')}'")
                 continue
 
+            # Validate column names exist
+            missing_columns = []
+            if suggestion.get('x_column') and suggestion.get('x_column') not in df.columns:
+                missing_columns.append(suggestion.get('x_column'))
+            if suggestion.get('y_column') and suggestion.get('y_column') not in df.columns:
+                missing_columns.append(suggestion.get('y_column'))
+            
+            if missing_columns:
+                print(f"❌ Missing columns {missing_columns} for chart '{suggestion.get('title')}', skipping")
+                print(f"Available columns: {list(df.columns)}")
+                continue
+
             img_buffer = io.BytesIO()
             df_copy = df.copy() 
             exec_scope = {'df': df_copy, 'pd': pd, 'plt': plt, 'img_buffer': img_buffer, 'io': io, 'np': np}
             
+            # Add debugging information
+            print(f"DataFrame shape before execution: {df_copy.shape}")
+            if suggestion.get('x_column'):
+                print(f"X-column '{suggestion.get('x_column')}' exists: {suggestion.get('x_column') in df_copy.columns}")
+            if suggestion.get('y_column'):
+                print(f"Y-column '{suggestion.get('y_column')}' exists: {suggestion.get('y_column') in df_copy.columns}")
+            
             # Execute the generated code
             exec(generated_code, exec_scope)
+            
+            # Add post-execution debugging
+            df_after = exec_scope.get('df_copy', df_copy)
+            print(f"DataFrame shape after execution: {df_after.shape}")
             
             # Reset buffer position to beginning after execution
             img_buffer.seek(0)
