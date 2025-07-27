@@ -27,7 +27,7 @@ import chardet
 # --- Environment and Model Setup ---
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-model_name = "gemini-2.0-flash"
+model_name = "gemini-2.5-pro"
 
 app = FastAPI(title="Robust AI Data Visualization Agent v2")
 
@@ -100,7 +100,7 @@ async def generate_dashboard(file: UploadFile = File(...)):
     parser = JsonOutputParser(pydantic_object=Suggestions)
 
     analysis_prompt = PromptTemplate(
-        template="""You are a meticulous data analyst. Analyze the schema and data sample below and suggest up to 5 insightful charts.
+        template="""You are a meticulous data analyst. Analyze the schema and data sample below and suggest 5 insightful charts.
         CRITICAL: Use ONLY the exact column names from the 'Columns' list in the schema.
         Schema: {df_info}
         Data Sample: {df_head}
@@ -118,6 +118,12 @@ async def generate_dashboard(file: UploadFile = File(...)):
 
     chart_images = []
     annotations = []
+    
+    print(f"=== CHART GENERATION SUMMARY ===")
+    print(f"Total chart suggestions received: {len(chart_suggestions)}")
+    for i, suggestion in enumerate(chart_suggestions, 1):
+        print(f"{i}. {suggestion.get('title', 'Untitled')} - Type: {suggestion.get('chart_type', 'Unknown')}")
+    print("=====================================")
 
     # --- FINAL, CORRECTED PROMPT for the Coder Agent ---
     code_gen_prompt = PromptTemplate.from_template(
@@ -136,42 +142,34 @@ async def generate_dashboard(file: UploadFile = File(...)):
         **MANDATORY STRUCTURE** (execute these steps directly, NO function definitions):
         
         1. Copy dataframe: `df_copy = df.copy()`
-        2. Clean data if needed (for numeric operations):
-           - `df_copy['column'] = pd.to_numeric(df_copy['column'], errors='coerce')`
-           - `df_copy.dropna(subset=['column'], inplace=True)`
-        3. Validate data exists after cleaning (must have at least 1 row)
-        4. Create figure: `fig, ax = plt.subplots(figsize=(10, 6))`
-        5. Plot based on chart type:
+        2. Create figure: `fig, ax = plt.subplots(figsize=(10, 6))`
+        3. Plot based on chart type:
            - Bar: `df_copy['column'].value_counts().plot(kind='bar', ax=ax)`
            - Histogram: `ax.hist(df_copy['column'], bins=20)`
            - Scatter: `ax.scatter(df_copy['x_col'], df_copy['y_col'])`
            - Pie: `df_copy['column'].value_counts().plot(kind='pie', ax=ax)`
-        6. Set title: `ax.set_title('{title}')`
-        7. Set axis labels if applicable
-        8. Save to buffer: `fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')`
-        9. Close: `plt.close(fig)`
-        
+        4. Set title: `ax.set_title('{title}')`
+        5. Set axis labels if applicable
+        6. Save to buffer: `fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')`
+        7. Close: `plt.close(fig)`
+
         **CRITICAL**: 
         - NO function definitions (def)
         - NO imports
         - NO comments
         - DIRECT executable statements only
         - MUST save to img_buffer
-        - Handle empty data gracefully
-        
-        **EXAMPLE WITH DATA VALIDATION**:
-        df_copy = df.copy()
-        if len(df_copy) > 0:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            df_copy['Company'].value_counts().plot(kind='bar', ax=ax)
-            ax.set_title('Company Distribution')
-            fig.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
-            plt.close(fig)
+
         """
     )
     code_gen_chain = code_gen_prompt | llm | StrOutputParser()
 
-    for suggestion in chart_suggestions:
+    successful_charts = 0
+    failed_charts = 0
+    skipped_charts = 0
+
+    for i, suggestion in enumerate(chart_suggestions, 1):
+        print(f"\n=== Processing Chart {i}/5: '{suggestion.get('title')}' ===")
         # --- FIX: Initialize generated_code to prevent UnboundLocalError ---
         generated_code = ""
         try:
@@ -188,6 +186,7 @@ async def generate_dashboard(file: UploadFile = File(...)):
             # Validate that the code doesn't contain function definitions
             if 'def ' in generated_code:
                 print(f"❌ Generated code contains function definitions, skipping chart '{suggestion.get('title')}'")
+                skipped_charts += 1
                 continue
 
             # Validate column names exist
@@ -200,6 +199,7 @@ async def generate_dashboard(file: UploadFile = File(...)):
             if missing_columns:
                 print(f"❌ Missing columns {missing_columns} for chart '{suggestion.get('title')}', skipping")
                 print(f"Available columns: {list(df.columns)}")
+                skipped_charts += 1
                 continue
 
             img_buffer = io.BytesIO()
@@ -233,17 +233,29 @@ async def generate_dashboard(file: UploadFile = File(...)):
             if buffer_size > 100:
                 chart_images.append(img_buffer)
                 annotations.append(suggestion['description'])
-                print(f"Successfully generated chart '{suggestion.get('title')}' ({buffer_size} bytes)")
+                successful_charts += 1
+                print(f"✅ Successfully generated chart '{suggestion.get('title')}' ({buffer_size} bytes)")
             else:
-                print(f"Code for chart '{suggestion.get('title')}' executed but produced an empty image ({buffer_size} bytes). Skipping.")
+                failed_charts += 1
+                print(f"❌ Code for chart '{suggestion.get('title')}' executed but produced an empty image ({buffer_size} bytes). Skipping.")
                 print(f"Generated Code:\n---\n{generated_code}\n---")
 
         except Exception as e:
+            failed_charts += 1
             print("--- FAILED CODE EXECUTION ---")
             print(f"Chart Title: {suggestion.get('title', 'Untitled')}")
             print(f"Error Type: {type(e).__name__}, Error: {e}")
             print(f"Generated Code That Failed:\n---\n{generated_code}\n---")
             continue
+    
+    # Print final summary
+    print(f"\n=== FINAL CHART GENERATION SUMMARY ===")
+    print(f"Total charts requested: 5")
+    print(f"✅ Successful charts: {successful_charts}")
+    print(f"❌ Failed charts: {failed_charts}")
+    print(f"⏭️  Skipped charts: {skipped_charts}")
+    print(f"📊 Charts in final PDF: {len(chart_images)}")
+    print("=====================================")
     
     if not chart_images:
         raise HTTPException(status_code=500, detail="No charts could be generated successfully. Check server logs for details.")
