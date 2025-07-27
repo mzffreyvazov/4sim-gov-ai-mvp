@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 
+
 # Environment files
 .env
 
@@ -13,6 +14,7 @@ __pycache__/
 
 # Output files
 *.pdf
+*.csv
 *.pptx
 
 # Docker
