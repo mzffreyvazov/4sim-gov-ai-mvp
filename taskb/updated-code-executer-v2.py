@@ -8,9 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from pydantic import BaseModel, Field
-from typing import List, Optional
-
-# Use a non-interactive backend for Matplotlib in a server environment
+from typing import Dict, List, Optional
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -27,7 +25,7 @@ import chardet
 # --- Environment and Model Setup ---
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-model_name = "gemini-2.5-pro"
+model_name = "gemini-2.0-flash"
 
 app = FastAPI(title="Robust AI Data Visualization Agent v2")
 
@@ -71,11 +69,21 @@ def clean_generated_code(code_string: str) -> str:
     return '\n'.join(cleaned_lines)
 
 class ChartSuggestion(BaseModel):
-    chart_type: str
-    x_column: Optional[str] = None
-    y_column: Optional[str] = None
-    title: str
-    description: str
+    title: str = Field(
+        description="The concise, descriptive title from 'Chart Suggestion Title'."
+    )
+    question: str = Field(
+        description="The analytical question from 'The Question it Answers'."
+    )
+    chart_type: str = Field(
+        description="The single chart type from 'Chart Type'."
+    )
+    column_mapping: Dict[str, Optional[str]] = Field(
+        description="A dictionary extracted from 'Column Mapping', e.g., {'X-Axis': 'col_a', 'Y-Axis': 'col_b', 'Grouping/Color': 'col_c'}."
+    )
+    description: str = Field(
+        description="The rationale and insight from 'Rationale and Insight'."
+    )
 
 class Suggestions(BaseModel):
     charts: List[ChartSuggestion]
@@ -100,7 +108,6 @@ async def generate_dashboard(file: UploadFile = File(...)):
     df.info(buf=buf)
     df_info_str = buf.getvalue()
 
-    parser = JsonOutputParser(pydantic_object=Suggestions)
     
     # Detailed Analysis Prompt
     analysis_template_prompt = """
