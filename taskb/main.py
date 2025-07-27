@@ -21,6 +21,7 @@ import chardet
 # Load env vars
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+model = "gemini-2.0-flash"  # Updated model version
 
 app = FastAPI(title="Task B: Data Viz & Analytics")
 
@@ -102,7 +103,7 @@ async def summarize(file: UploadFile = File(...)):
         
         # Initialize Gemini with API key
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model=model,
             temperature=0.0,
             api_key=GOOGLE_API_KEY
         )
@@ -133,7 +134,7 @@ async def generate_charts(file: UploadFile = File(...)):
         
         # Initialize Gemini with API key
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model=model,
             temperature=0.0,
             api_key=GOOGLE_API_KEY
         )
