@@ -22,15 +22,14 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import chardet
 
-# --- Environment and Model Setup ---
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY_NEW")
 model_name = "gemini-2.0-flash"
 
 app = FastAPI(title="Robust AI Data Visualization Agent v2")
 
-# --- Helper Functions and Classes ---
 
+# Helper functions
 def setup_unicode_fonts():
     font_paths = ["DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "C:\\Windows\\Fonts\\Arial.ttf"]
     for font_path in font_paths:
@@ -50,13 +49,11 @@ def read_file_with_encoding_detection(file_content: bytes, filename: str) -> pd.
         raise ValueError(f"Could not parse the file. Error: {e}")
 
 def clean_generated_code(code_string: str) -> str:
-    # Remove markdown code blocks
     if "```python" in code_string:
         code_string = code_string.split("```python")[1].strip()
     if "```" in code_string:
         code_string = code_string.split("```")[0].strip()
     
-    # Remove import statements since they're already in scope
     lines = code_string.split('\n')
     cleaned_lines = []
     for line in lines:
@@ -88,7 +85,59 @@ class ChartSuggestion(BaseModel):
 class Suggestions(BaseModel):
     charts: List[ChartSuggestion]
 
-# --- Core Application Logic ---
+# Core logics & endpoints
+@app.post("/summarize/")
+async def summarize(file: UploadFile = File(...)):
+    try:
+        file_content = await file.read()
+        df = read_file_with_encoding_detection(file_content, file.filename)
+
+        df_head_str = df.head(20).to_string()
+        df_shape_str = str(df.shape)
+        df_columns_str = str(df.columns.tolist())
+        df_description_str = df.describe(include='all').to_string()
+        buf = io.StringIO()
+        df.info(buf=buf)
+        df_info_str = buf.getvalue()
+
+        summary = {
+            "filename": file.filename,
+            "rows": len(df),
+            "cols": len(df.columns),
+            "dtypes": df.dtypes.astype(str).to_dict(),
+            "head": df.head(3).to_dict(orient="records"),
+            "head_str": df_head_str,
+            "shape": df_shape_str,
+            "columns": df_columns_str,
+            "description": df_description_str,
+            "info": df_info_str
+        }
+
+        llm = ChatGoogleGenerativeAI(model=model_name, temperature=0.1, api_key=GOOGLE_API_KEY)
+
+        prompt = PromptTemplate(
+            input_variables=["schema", "stats", "df_info_str", "df_description_str"],
+            template="""
+            You are an expert data analyst. Given the following dataset schema and statistics, provide a detailed summary (up to 7 sentences) covering:
+            - The structure and main characteristics of the dataset (columns, types, shape, sample rows)
+            - Notable patterns, distributions, or anomalies you observe from the head, description, and info
+            - Potential focus areas or questions this dataset could help answer
+            - 2-3 specific suggestions for further analysis or insights that could be derived
+
+            Schema: {schema}
+            Stats: {stats}
+            Info: {df_info_str}
+            Description: {df_description_str}
+            """
+        )
+        chain = prompt | llm | StrOutputParser()
+        narrative = chain.invoke({"schema": list(df.columns), "stats": summary, "df_info_str": df_info_str, "df_description_str": df_description_str})
+
+        return {"summary": summary, "narrative": narrative}
+    
+    except Exception as e:
+        return {"error": f"Failed to process file: {str(e)}"}
+
 
 @app.post("/generate-dashboard/", response_class=FileResponse)
 async def generate_dashboard(file: UploadFile = File(...)):
@@ -154,16 +203,6 @@ async def generate_dashboard(file: UploadFile = File(...)):
     *   **Use Exact Column Names:** You MUST use ONLY the exact column names from the 'Column Names' list provided. Do not alter or invent them.
     *   **Suggest Diverse Charts:** Provide a mix of visualizations that cover different analytical goals.
     """
-    
-    # analysis_prompt = PromptTemplate(
-    #     template="""You are a meticulous data analyst. Analyze the schema and data sample below and suggest 5 insightful charts.
-    #     CRITICAL: Use ONLY the exact column names from the 'Columns' list in the schema.
-    #     Schema: {df_info}
-    #     Data Sample: {df_head}
-    #     {format_instructions}""",
-    #     input_variables=["df_info", "df_head"],
-    #     partial_variables={"format_instructions": parser.get_format_instructions()},
-    # )
 
     analysis_prompt = PromptTemplate.from_template(analysis_template_prompt)
     analysis_chain = analysis_prompt | llm | StrOutputParser()
@@ -288,7 +327,6 @@ async def generate_dashboard(file: UploadFile = File(...)):
 
     for i, suggestion in enumerate(chart_suggestions, 1):
         print(f"\n=== Processing Chart {i}/{len(chart_suggestions)}: '{suggestion.get('title')}' ===")
-        # --- FIX: Initialize generated_code to prevent UnboundLocalError ---
         generated_code = ""
         try:
             raw_code = code_gen_chain.invoke({
@@ -307,13 +345,12 @@ async def generate_dashboard(file: UploadFile = File(...)):
             generated_code = clean_generated_code(raw_code)
             print(f"Generated code for '{suggestion.get('title')}':\n---\n{generated_code}\n---")
 
-            # Validate that the code doesn't contain function definitions
             if 'def ' in generated_code:
                 print(f"❌ Generated code contains function definitions, skipping chart '{suggestion.get('title')}'")
                 skipped_charts += 1
                 continue
 
-            # Validate column names exist
+            # Validate column names 
             missing_columns = []
             if suggestion.get('x_column') and suggestion.get('x_column') not in df.columns:
                 missing_columns.append(suggestion.get('x_column'))
