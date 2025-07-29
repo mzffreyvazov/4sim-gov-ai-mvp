@@ -23,7 +23,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 import chardet
 
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY_NEW")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 model_name = "gemini-2.0-flash"
 
 app = FastAPI(title="Robust AI Data Visualization Agent v2")
