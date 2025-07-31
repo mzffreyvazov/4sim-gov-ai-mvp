@@ -4,6 +4,7 @@ __pycache__/
 other/
 
 output_slides_html/
+output_folder_name
 # Environment files
 .env
 

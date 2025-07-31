@@ -11,16 +11,13 @@ import logging
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 
-# --- Setup remains the same ---
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 app = FastAPI(title="Task D: Slide Generation")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Helper functions remain the same ---
 def extract_json_from_response(text: str):
-    # ... (code is unchanged)
     try:
         json_start = text.index('{')
         json_end = text.rindex('}') + 1
