@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punktlar olan slidelar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Arial:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS styles are embedded here */
+        :root {
+            --primary-color: #8B7735; /* Approximate color from the image */
+            --text-light: #FFFFFF;
+            --text-dark: #333333;
+            --border-color: #DDDDDD;
+            --background-color: #FFFFFF;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .slide {
+            width: 100%;
+            max-width: 1920px;
+            aspect-ratio: 1920 / 1080;
+            background-color: var(--background-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 80px 100px;
+            box-sizing: border-box;
+        }
+
+        /* Header */
+        .slide-header {
+            position: relative;
+            width: 100%;
+            height: 90px;
+        }
+
+        .title {
+            font-size: 2.5rem; /* Equivalent to a large title font */
+            color: var(--text-dark);
+            margin: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .logo {
+            position: absolute;
+            top: -30px;
+            right: 0;
+            width: 220px;
+            height: 120px;
+        }
+
+        .logo img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .header-rule {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            border: none;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+
+        /* Main Content */
+        .slide-content {
+            flex-grow: 1;
+            padding-top: 80px; /* Space for the badges */
+        }
+
+        .columns-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px; /* Cell padding */
+            height: 100%;
+        }
+
+        .column {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Add vertical dividers */
+        .column:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 5%;
+            right: -11px; /* (gap / 2) + (width / 2) */
+            width: 2px;
+            height: 90%;
+            background-color: var(--border-color);
+        }
+
+        .badge {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background-color: var(--text-light);
+            border: 3px solid var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            z-index: 2;
+        }
+
+        .column-header {
+            background-color: var(--primary-color);
+            height: 150px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-light);
+        }
+
+        .column-header h2 {
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .column-body {
+            padding-top: 20px;
+            color: var(--text-dark);
+            font-size: 1.5rem;
+        }
+
+        .column-body p {
+            margin: 0;
+        }
+
+        /* Footer */
+        .slide-footer {
+            position: absolute;
+            bottom: 50px;
+            left: 100px;
+            right: 100px;
+            height: 60px;
+        }
+
+        .footer-rule {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            border: none;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            font-size: 1.5rem;
+            color: var(--text-dark);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="slide">
+        <header class="slide-header">
+            <h1 class="title">Punktlar olan slidelar</h1>
+            <div class="logo">
+                <!-- Using a placeholder for the logo that will work online -->
+                <img src="assets/4sim_logo.png" alt="Ministry of Economy of Azerbaijan logo">
+            </div>
+            <hr class="header-rule">
+        </header>
+
+        <main class="slide-content">
+            <div class="columns-grid">
+                <!-- Column A -->
+                <div class="column">
+                    <div class="badge">A</div>
+                    <div class="column-header">
+                        <h2>Punk 1</h2>
+                    </div>
+                    <div class="column-body">
+                        <p>Content here</p>
+                    </div>
+                </div>
+
+                <!-- Column B -->
+                <div class="column">
+                    <div class="badge">B</div>
+                    <div class="column-header">
+                        <h2>Punk 2</h2>
+                    </div>
+                    <div class="column-body">
+                        <p>xxxx</p>
+                    </div>
+                </div>
+
+                <!-- Column C -->
+                <div class="column">
+                    <div class="badge">C</div>
+                    <div class="column-header">
+                        <h2>Punk 3</h2>
+                    </div>
+                    <div class="column-body">
+                        <p>xxxx</p>
+                    </div>
+                </div>
+
+                <!-- Column D -->
+                <div class="column">
+                    <div class="badge">D</div>
+                    <div class="column-header">
+                        <h2>Punk 3</h2>
+                    </div>
+                    <div class="column-body">
+                        <p>xxxx</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="slide-footer">
+            <hr class="footer-rule">
+            <span class="page-number">3</span>
+        </footer>
+    </div>
+
+</body>
+</html>
