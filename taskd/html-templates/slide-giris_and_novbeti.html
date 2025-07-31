@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-Panel Slide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --left-bg: #FFFFFF;
+            --right-bg: #F0EBE0; /* Color sampled from the image */
+            --text-color: #333333;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #333;
+            margin: 0;
+            font-family: 'Montserrat', 'Arial', sans-serif;
+        }
+
+        .slide {
+            width: 100%;
+            max-width: 1920px;
+            aspect-ratio: 16 / 9;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+            display: flex;
+            overflow: hidden; /* Hide anything that might stick out */
+        }
+
+        .left-panel,
+        .right-panel {
+            flex: 1; /* Each panel takes up 50% of the width */
+            padding: 80px;
+            box-sizing: border-box;
+        }
+
+        .left-panel {
+            background-color: var(--left-bg);
+        }
+
+        .right-panel {
+            background-color: var(--right-bg);
+            position: relative; /* Needed for absolute positioning of children */
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+
+        .logo {
+            position: absolute;
+            top: 40px;
+            right: 80px;
+            width: 220px; /* Adjust as needed */
+            height: auto;
+        }
+
+        .logo img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 40px;
+            right: 80px;
+            font-size: 1.25rem;
+            color: var(--text-color);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="slide">
+        <!-- Left half of the slide -->
+        <div class="left-panel">
+            <h2>Layihənin məzmunu</h2>
+        </div>
+
+        <!-- Right half of the slide -->
+        <div class="right-panel">
+            <div class="logo">
+                <img src="assets/4sim_logo.png" alt="Ministry of Economy of Azerbaijan logo">
+            </div>
+            <h2>Məqsəd</h2>
+            <span class="page-number">2</span>
+        </div>
+    </div>
+
+</body>
+</html>
