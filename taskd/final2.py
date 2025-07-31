@@ -166,8 +166,10 @@ async def make_slides(
         input_variables=["prompt", "text", "slide_count", "json_format", "current_date"],
         template=(
             "User instruction: {prompt}\n\nDocument content:\n---\n{text}\n---\n\n"
-            "**CRITICAL RULES:**\n1. `content_slides` array MUST contain EXACTLY {slide_count} objects.\n"
-            "2. Inside EACH `content_slides` object, the `contents` array MUST contain EXACTLY 4 objects.\n\n"
+            "**CRITICAL RULES:**\n"
+            "1. `content_slides` array MUST contain EXACTLY {slide_count} objects.\n"
+            "2. Inside EACH `content_slides` object, the `contents` array MUST contain EXACTLY 4 objects.\n"
+            "3. The `presentation_title` in `intro_slide` MUST be a maximum of 4 words.\n\n"
             "Return ONLY a single valid JSON object.\n\nJSON Format Example:\n{json_format}"
         )
     )
