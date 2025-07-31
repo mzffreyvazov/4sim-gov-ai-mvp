@@ -51,7 +51,8 @@ def generate_html_slides(data: dict) -> list[str]:
     logger.info(f"Looking for templates in: {templates_dir}")
     logger.info(f"Files in template directory: {os.listdir(templates_dir)}")
     logger.info(f"Templates seen by Jinja2: {env.list_templates()}")
-    output_dir = "output_slides_html"
+    # Set output directory to 'output_folder_name' in the taskd folder
+    output_dir = os.path.join(os.path.dirname(__file__), "output_folder_name")
     os.makedirs(output_dir, exist_ok=True)
     generated_files = []
     slide_counter = 1
@@ -64,7 +65,8 @@ def generate_html_slides(data: dict) -> list[str]:
         template = env.get_template("slide-basliq.html")
         rendered_html = template.render(
             presentation_title=intro_data.get("presentation_title", "Başlıq yoxdur"),
-            presentation_date=intro_data.get("presentation_date", "")
+            presentation_date=intro_data.get("presentation_date", ""),
+            assets_path="D:\\Downloads\\code\\code\\Extra-Projects\\4sim\\4sim-gov-ai-mvp\\taskd\\html-templates\\assets\\"
         )
         file_path = os.path.join(output_dir, f"{slide_counter:02d}_intro.html")
         with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
@@ -80,10 +82,13 @@ def generate_html_slides(data: dict) -> list[str]:
             right_panel_title="Məqsəd",
             left_panel_content=content_goal_data.get("presentation_overview", ""),
             right_panel_content=content_goal_data.get("presentation_goal", ""),
-            page_number=slide_counter
+            page_number=slide_counter,
+            assets_path="D:/Downloads/code/code/Extra-Projects/4sim/4sim-gov-ai-mvp/taskd/html-templates/assets/"
         )
+
         file_path = os.path.join(output_dir, f"{slide_counter:02d}_content_goal.html")
-        with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(rendered_html)
         generated_files.append(file_path)
         slide_counter += 1
 
@@ -96,7 +101,8 @@ def generate_html_slides(data: dict) -> list[str]:
             rendered_html = template.render(
                 general_content_title=slide.get("general_content_title", "Məzmun"),
                 contents=slide.get("contents", []),
-                page_number=slide_counter
+                page_number=slide_counter,
+                assets_path="D:/Downloads/code/code/Extra-Projects/4sim/4sim-gov-ai-mvp/taskd/html-templates/assets/"
             )
             file_path = os.path.join(output_dir, f"{slide_counter:02d}_content_{i+1}.html")
             with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
@@ -109,15 +115,16 @@ def generate_html_slides(data: dict) -> list[str]:
     if chart_slides:
         template = env.get_template("slide-with_charts.html")
         for i, slide in enumerate(chart_slides):
-             rendered_html = template.render(
+            rendered_html = template.render(
                 content_title=slide.get("content_title", "Diaqram"),
                 chart_summary=slide.get("chart_summary", ""), # You would pass chart data here
-                page_number=slide_counter
+                page_number=slide_counter,
+                assets_path="D:/Downloads/code/code/Extra-Projects/4sim/4sim-gov-ai-mvp/taskd/html-templates/assets/"
             )
-             file_path = os.path.join(output_dir, f"{slide_counter:02d}_chart_{i+1}.html")
-             with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
-             generated_files.append(file_path)
-             slide_counter += 1
+            file_path = os.path.join(output_dir, f"{slide_counter:02d}_chart_{i+1}.html")
+            with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
+            generated_files.append(file_path)
+            slide_counter += 1
 
     # 6. Generate Final Slide (Next Steps)
     final_data = presentation_data.get("final_slide", {})
@@ -132,7 +139,8 @@ def generate_html_slides(data: dict) -> list[str]:
             right_panel_title="",
             left_panel_content=next_steps_html,
             right_panel_content="",
-            page_number=slide_counter
+            page_number=slide_counter,
+            assets_path="D:/Downloads/code/code/Extra-Projects/4sim/4sim-gov-ai-mvp/taskd/html-templates/assets/"
         )
         file_path = os.path.join(output_dir, f"{slide_counter:02d}_final.html")
         with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
