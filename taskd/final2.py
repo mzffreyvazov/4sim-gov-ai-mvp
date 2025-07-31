@@ -137,8 +137,8 @@ def generate_html_slides(data: dict) -> list[str]:
         rendered_html = template.render(
             left_panel_title="Növbəti Addımlar",
             right_panel_title="",
-            left_panel_content=next_steps_html,
-            right_panel_content="",
+            left_panel_content="",
+            right_panel_content=next_steps_html,
             page_number=slide_counter,
             assets_path="D:/Downloads/code/code/Extra-Projects/4sim/4sim-gov-ai-mvp/taskd/html-templates/assets/"
         )
