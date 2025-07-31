@@ -66,7 +66,7 @@ def generate_html_slides(data: dict) -> list[str]:
         rendered_html = template.render(
             presentation_title=intro_data.get("presentation_title", "Başlıq yoxdur"),
             presentation_date=intro_data.get("presentation_date", ""),
-            assets_path="D:\\Downloads\\code\\code\\Extra-Projects\\4sim\\4sim-gov-ai-mvp\\taskd\\html-templates\\assets\\"
+            assets_path="D:/Downloads/code/code/Extra-Projects/4sim/4sim-gov-ai-mvp/taskd/html-templates/assets/"
         )
         file_path = os.path.join(output_dir, f"{slide_counter:02d}_intro.html")
         with open(file_path, "w", encoding="utf-8") as f: f.write(rendered_html)
