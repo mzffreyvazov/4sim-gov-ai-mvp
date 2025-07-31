@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Centered Two-Panel Slide</title>
+    <title>Asymmetrical Two-Panel Slide</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
@@ -37,24 +37,25 @@
 
         .left-panel,
         .right-panel {
-            flex: 1;
             box-sizing: border-box;
             padding: 80px;
-            /* UPDATED: Flexbox properties for centering content */
             display: flex;
-            justify-content: center; /* Vertical alignment */
-            align-items: center;     /* Horizontal alignment */
+            justify-content: center;
+            align-items: center;
         }
 
+        /* UPDATED: Changed flex ratio to make right panel wider */
         .left-panel {
+            flex: 2; /* Takes 2 parts of the space (e.g., 40%) */
             background-color: var(--left-bg);
         }
 
         .right-panel {
+            flex: 3.5; /* Takes 3 parts of the space (e.g., 60%) */
             background-color: var(--right-bg);
             position: relative;
-            flex-direction: column; /* Stack items vertically */
-            gap: 40px; /* Space between centered items */
+            flex-direction: column;
+            gap: 40px;
         }
         
         .left-panel h2 {
@@ -65,7 +66,6 @@
             text-align: center;
         }
         
-        /* Placeholder content for the right side */
         .right-content-wrapper {
             display: flex;
             flex-direction: column;
@@ -87,11 +87,11 @@
         }
         
         .bullet-points {
-            list-style-type: none; /* Removes default bullet points */
+            list-style-type: none;
             padding: 0;
             margin: 0;
             font-size: 1.4rem;
-            text-align: left; /* Align text left within the centered block */
+            text-align: left;
         }
         
         .bullet-points li {
@@ -100,9 +100,8 @@
             padding-left: 30px;
         }
 
-        /* Custom bullet point style */
         .bullet-points li::before {
-            content: '■'; /* Unicode square character */
+            content: '■';
             position: absolute;
             left: 0;
             color: var(--text-color);
