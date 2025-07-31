@@ -184,7 +184,7 @@
 
     <div class="slide">
         <header class="slide-header">
-            <h1 class="title">Punktlar olan slidelar</h1>
+            <h1 class="title">{{ general_content_title }}</h1>
             <div class="logo">
                 <!-- Using a placeholder for the logo that will work online -->
                 <img src="assets/4sim_logo.png" alt="Ministry of Economy of Azerbaijan logo">
@@ -194,55 +194,24 @@
 
         <main class="slide-content">
             <div class="columns-grid">
-                <!-- Column A -->
+                {% for content in contents %}
+                <!-- Column {{ loop.index }} -->
                 <div class="column">
-                    <div class="badge">A</div>
+                    <div class="badge">{{ ['A', 'B', 'C', 'D'][loop.index0] }}</div>
                     <div class="column-header">
-                        <h2>Punk 1</h2>
+                        <h2>{{ content.title }}</h2>
                     </div>
                     <div class="column-body">
-                        <p>Content here</p>
+                        <p>{{ content.content }}</p>
                     </div>
                 </div>
-
-                <!-- Column B -->
-                <div class="column">
-                    <div class="badge">B</div>
-                    <div class="column-header">
-                        <h2>Punk 2</h2>
-                    </div>
-                    <div class="column-body">
-                        <p>xxxx</p>
-                    </div>
-                </div>
-
-                <!-- Column C -->
-                <div class="column">
-                    <div class="badge">C</div>
-                    <div class="column-header">
-                        <h2>Punk 3</h2>
-                    </div>
-                    <div class="column-body">
-                        <p>xxxx</p>
-                    </div>
-                </div>
-
-                <!-- Column D -->
-                <div class="column">
-                    <div class="badge">D</div>
-                    <div class="column-header">
-                        <h2>Punk 3</h2>
-                    </div>
-                    <div class="column-body">
-                        <p>xxxx</p>
-                    </div>
-                </div>
+                {% endfor %}
             </div>
         </main>
 
         <footer class="slide-footer">
             <hr class="footer-rule">
-            <span class="page-number">3</span>
+            <span class="page-number">{{ page_number }}</span>
         </footer>
     </div>
 

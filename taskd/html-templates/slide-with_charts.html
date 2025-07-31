@@ -62,7 +62,14 @@
             font-size: 3rem;
             font-weight: 600;
             color: var(--text-color);
-            margin: 0;
+            margin: 0 0 20px 0;
+            text-align: center;
+        }
+
+        .chart-summary {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            color: var(--text-color);
             text-align: center;
         }
         
@@ -134,7 +141,8 @@
     <div class="slide">
         <!-- Left half of the slide (Centered Title) -->
         <div class="left-panel">
-            <h2>Layihənin Məzmunu</h2>
+            <h2>{{ content_title }}</h2>
+            <div class="chart-summary">{{ chart_summary|safe }}</div>
         </div>
 
         <!-- Right half of the slide (Centered Content) -->
@@ -152,13 +160,13 @@
                 
                 <!-- Placeholder for bullet points -->
                 <ul class="bullet-points">
-                    <li>First key takeaway or point.</li>
-                    <li>Second explanatory detail.</li>
-                    <li>Third piece of information.</li>
+                    <li>Chart visualization will be here.</li>
+                    <li>Data representation area.</li>
+                    <li>Visual analytics section.</li>
                 </ul>
             </div>
 
-            <span class="page-number">3</span>
+            <span class="page-number">{{ page_number }}</span>
         </div>
     </div>
 

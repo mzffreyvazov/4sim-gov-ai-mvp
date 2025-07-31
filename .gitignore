@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 other/
 
-
+output_slides_html/
 # Environment files
 .env
 

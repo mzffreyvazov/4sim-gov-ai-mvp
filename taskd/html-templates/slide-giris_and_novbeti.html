@@ -55,7 +55,14 @@
             font-size: 2.5rem;
             font-weight: 600;
             color: var(--text-color);
-            margin: 0;
+            margin: 0 0 20px 0;
+        }
+
+        .left-panel-content,
+        .right-panel-content {
+            font-size: 1.2rem;
+            line-height: 1.6;
+            color: var(--text-color);
         }
 
         .logo {
@@ -86,7 +93,8 @@
     <div class="slide">
         <!-- Left half of the slide -->
         <div class="left-panel">
-            <h2>Layihənin məzmunu</h2>
+            <h2>{{ left_panel_title }}</h2>
+            <div class="left-panel-content">{{ left_panel_content|safe }}</div>
         </div>
 
         <!-- Right half of the slide -->
@@ -94,8 +102,13 @@
             <div class="logo">
                 <img src="assets/4sim_logo.png" alt="Ministry of Economy of Azerbaijan logo">
             </div>
-            <h2>Məqsəd</h2>
-            <span class="page-number">2</span>
+            {% if right_panel_title %}
+            <h2>{{ right_panel_title }}</h2>
+            {% endif %}
+            {% if right_panel_content %}
+            <div class="right-panel-content">{{ right_panel_content|safe }}</div>
+            {% endif %}
+            <span class="page-number">{{ page_number }}</span>
         </div>
     </div>
 
