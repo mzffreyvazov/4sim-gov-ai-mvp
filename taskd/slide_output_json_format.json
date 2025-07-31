@@ -1,0 +1,47 @@
+{
+  "presentation": {
+    "intro_slide": {
+      "presentation_title": "The main title of the presentation in Azerbaijani",
+      "presentation_date": "DD.MM.YYYY"
+    },
+    "project_content_slide": {
+      "presentation_overview": "A 3-sentence summary of the document's content in Azerbaijani.",
+      "presentation_goal": "A concise statement about the presentation's primary goal in Azerbaijani."
+    },
+    "content_slides": [
+      {
+        "general_content_title": "A title for this section of the presentation in Azerbaijani",
+        "contents": [
+          {
+            "title": "Punkt A",
+            "content": "A 2-3 sentence explanation for the first point in Azerbaijani."
+          },
+          {
+            "title": "Punkt B",
+            "content": "A 2-3 sentence explanation for the second point in Azerbaijani."
+          },
+          {
+            "title": "Punkt C",
+            "content": "A 2-3 sentence explanation for the third point in Azerbaijani."
+          },
+          {
+            "title": "Punkt D",
+            "content": "A 2-3 sentence explanation for the fourth point in Azerbaijani."
+          }
+        ]
+      }
+    ],
+    "chart_slides": [
+      {
+        "content_title": "The title for the slide containing the chart in Azerbaijani.",
+        "chart_summary": "A summary or explanation of what the chart represents in Azerbaijani."
+      }
+    ],
+    "final_slide": {
+      "next_steps": [
+        "First next step or action item in Azerbaijani.",
+        "Second next step or action item in Azerbaijani."
+      ]
+    }
+  }
+}

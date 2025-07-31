@@ -11,7 +11,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from pptx import Presentation
 from pptx.util import Inches, Pt
-
+import logging
 from datetime import datetime
 
 
@@ -69,7 +69,7 @@ async def make_slides(
     prompt: str = Form(...),
     slide_count: int = Form(...)
 ):
-    import logging
+    
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ async def make_slides(
         template=(
             "User instruction: {prompt}\n\n"
             "Document content:\n{text}\n\n"
-            "Based on the document and the user instruction, generate a presentation outline with approximately {slide_count} slides.\n"
+            "Based on the document and the user instruction, generate a presentation outline with exactly {slide_count} slides.\n"
             "Return ONLY a JSON object with a single key 'slides' which is an array of objects, where each object has:\n"
             "  title: string (in Azerbaijani),\n"
             "  bullets: array of short bullet points (in Azerbaijani).\n"
@@ -172,6 +172,7 @@ async def make_slides(
             "paragraphs": [p.strip() for p in az_text.split("\n") if p.strip()]
         })
 
+    # F) Create the PowerPoint presentation
     # Layout indices from your template master
     INTRO_LAYOUT_INDEX = 0
     CONTENT_LAYOUT_INDEX = 1  # Project Content & Goals
