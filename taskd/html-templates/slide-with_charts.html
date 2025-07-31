@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centered Two-Panel Slide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --left-bg: #FFFFFF;
+            --right-bg: #F0EBE0; /* Color sampled from the image */
+            --text-color: #333333;
+            --placeholder-border: #cccccc;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #333;
+            margin: 0;
+            font-family: 'Montserrat', 'Arial', sans-serif;
+        }
+
+        .slide {
+            width: 100%;
+            max-width: 1920px;
+            aspect-ratio: 16 / 9;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .left-panel,
+        .right-panel {
+            flex: 1;
+            box-sizing: border-box;
+            padding: 80px;
+            /* UPDATED: Flexbox properties for centering content */
+            display: flex;
+            justify-content: center; /* Vertical alignment */
+            align-items: center;     /* Horizontal alignment */
+        }
+
+        .left-panel {
+            background-color: var(--left-bg);
+        }
+
+        .right-panel {
+            background-color: var(--right-bg);
+            position: relative;
+            flex-direction: column; /* Stack items vertically */
+            gap: 40px; /* Space between centered items */
+        }
+        
+        .left-panel h2 {
+            font-size: 3rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+            text-align: center;
+        }
+        
+        /* Placeholder content for the right side */
+        .right-content-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 100%;
+        }
+
+        .chart-placeholder {
+            width: 80%;
+            height: 300px;
+            border: 2px dashed var(--placeholder-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--placeholder-border);
+            font-size: 1.5rem;
+            margin-bottom: 30px;
+        }
+        
+        .bullet-points {
+            list-style-type: none; /* Removes default bullet points */
+            padding: 0;
+            margin: 0;
+            font-size: 1.4rem;
+            text-align: left; /* Align text left within the centered block */
+        }
+        
+        .bullet-points li {
+            margin-bottom: 15px;
+            position: relative;
+            padding-left: 30px;
+        }
+
+        /* Custom bullet point style */
+        .bullet-points li::before {
+            content: '■'; /* Unicode square character */
+            position: absolute;
+            left: 0;
+            color: var(--text-color);
+            font-size: 1rem;
+        }
+
+        .logo {
+            position: absolute;
+            top: 40px;
+            right: 80px;
+            width: 220px;
+            height: auto;
+        }
+
+        .logo img {
+            width: 100%;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 40px;
+            right: 80px;
+            font-size: 1.25rem;
+            color: var(--text-color);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="slide">
+        <!-- Left half of the slide (Centered Title) -->
+        <div class="left-panel">
+            <h2>Layihənin Məzmunu</h2>
+        </div>
+
+        <!-- Right half of the slide (Centered Content) -->
+        <div class="right-panel">
+            <div class="logo">
+                <img src="assets/4sim_logo.png" alt="Ministry of Economy of Azerbaijan logo">
+            </div>
+
+            <!-- Wrapper for centered content -->
+            <div class="right-content-wrapper">
+                <!-- Placeholder for a chart -->
+                <div class="chart-placeholder">
+                    Chart Area
+                </div>
+                
+                <!-- Placeholder for bullet points -->
+                <ul class="bullet-points">
+                    <li>First key takeaway or point.</li>
+                    <li>Second explanatory detail.</li>
+                    <li>Third piece of information.</li>
+                </ul>
+            </div>
+
+            <span class="page-number">3</span>
+        </div>
+    </div>
+
+</body>
+</html>
