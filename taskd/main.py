@@ -1,8 +1,9 @@
 import os
 import json
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Body
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import fitz
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
@@ -14,8 +15,15 @@ from pptx import Presentation
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 app = FastAPI(title="Task D: Slide Generation")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Global variable to store the current JSON data
+current_presentation_data = {}
 
 def extract_json_from_response(text: str):
     try:
@@ -38,10 +46,6 @@ async def parse_doc(file: UploadFile = File(...)):
 
 
 def debug_template_structure(template_path: str):
-    """
-    Debug function to examine the structure of the PowerPoint template.
-    Logs information about slide layouts and their placeholders.
-    """
     try:
         prs = Presentation(template_path)
         logger.info(f"Template has {len(prs.slide_layouts)} slide layouts:")
@@ -365,7 +369,6 @@ def generate_pptx_presentation(data: dict) -> str:
         logger.error(f"Error generating PPTX presentation: {e}", exc_info=True)
         raise
 
-# --- /make_slides/ endpoint remains the same, it will now call the corrected function ---
 @app.post("/make_slides/")
 async def make_slides(
     doc: UploadFile = File(...),
@@ -455,7 +458,6 @@ async def make_slides(
 
     # --- Part 2: PPTX generation ---
     try:
-        # Generate PPTX presentation
         pptx_file_path = generate_pptx_presentation(output_json)
         logger.info(f"Successfully generated PPTX presentation: {pptx_file_path}")
         
@@ -474,7 +476,6 @@ async def test_pptx_generation():
     Test endpoint to generate a sample PPTX presentation using sample data.
     Useful for testing the PPTX generation functionality.
     """
-    # Sample JSON data for testing
     sample_data = {
         "presentation": {
             "intro_slide": {
@@ -535,3 +536,154 @@ async def test_pptx_generation():
     except Exception as e:
         logger.error(f"Failed to generate test PPTX: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate test PPTX. Error: {e}")
+
+@app.get("/")
+async def serve_frontend():
+    """Serve the frontend HTML page"""
+    return FileResponse("static/index.html")
+
+@app.post("/generate_json/")
+async def generate_json_only(
+    doc: UploadFile = File(...),
+    prompt: str = Form(...),
+    slide_count: int = Form(...)
+):
+    """Generate JSON content from document without creating PPTX"""
+    global current_presentation_data
+    
+    # Parse document
+    parsed_doc = await parse_doc(doc)
+    doc_text = parsed_doc["text"]
+    
+    # Initialize LLM
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.1, api_key=GOOGLE_API_KEY)
+    
+    json_format_string = """
+{
+  "presentation": {
+    "intro_slide": {
+      "presentation_title": "The main title of the presentation in Azerbaijani",
+      "presentation_date": "DD.MM.YYYY"
+    },
+    "project_content_slide": {
+      "presentation_overview": "A 3-sentence summary of the document's content in Azerbaijani.",
+      "presentation_goal": "A concise statement about the presentation's primary goal in Azerbaijani."
+    },
+    "content_slides": [
+      {
+        "general_content_title": "A title for this section of the presentation in Azerbaijani",
+        "contents": [
+          {
+            "title": "Punkt A",
+            "content-1": "A 2-3 sentence explanation for the first point in Azerbaijani."
+          },
+          {
+            "title": "Punkt B",
+            "content-2": "A 2-3 sentence explanation for the second point in Azerbaijani."
+          },
+          {
+            "title": "Punkt C",
+            "content-3": "A 2-3 sentence explanation for the third point in Azerbaijani."
+          },
+          {
+            "title": "Punkt D",
+            "content-4": "A 2-3 sentence explanation for the fourth point in Azerbaijani."
+          }
+        ]
+      }
+    ],
+    "chart_slides": [
+      {
+        "content_title": "The title for the slide containing the chart in Azerbaijani.",
+        "chart_summary": "A summary or explanation of what the chart represents in Azerbaijani."
+      }
+    ],
+    "final_slide": {
+      "next_steps": [
+        "First next step or action item in Azerbaijani.",
+        "Second next step or action item in Azerbaijani.",
+        "Third next step or action item in Azerbaijani.",
+        "Fourth next step or action item in Azerbaijani.",
+        "Fifth next step or action item in Azerbaijani."
+      ]
+    }
+  }
+}
+"""
+    
+    generation_prompt = PromptTemplate(
+        input_variables=["prompt", "text", "slide_count", "json_format", "current_date"],
+        template=(
+            "User instruction: {prompt}\n\nDocument content:\n---\n{text}\n---\n\n"
+            "**CRITICAL RULES:**\n"
+            "1. `content_slides` array MUST contain EXACTLY {slide_count} objects.\n"
+            "2. Inside EACH `content_slides` object, the `contents` array MUST contain EXACTLY 4 objects.\n"
+            "3. The `presentation_title` in `intro_slide` MUST be a maximum of 4 words.\n"
+            "4. The `next_steps` array in `final_slide` MUST contain AT LEAST 5 items.\n\n"
+            "Return ONLY a single valid JSON object.\n\nJSON Format Example:\n{json_format}"
+        )
+    )
+    
+    generation_chain = generation_prompt | llm | StrOutputParser()
+    current_date_str = datetime.now().strftime("%d.%m.%Y")
+    
+    llm_response = generation_chain.invoke({
+        "prompt": prompt, "text": doc_text, "slide_count": slide_count,
+        "json_format": json_format_string, "current_date": current_date_str
+    })
+    
+    try:
+        clean_json_str = extract_json_from_response(llm_response)
+        output_json = json.loads(clean_json_str)
+        
+        # Store the generated data globally
+        current_presentation_data = output_json
+        
+        return JSONResponse(content={
+            "message": "JSON content generated successfully.",
+            "json_data": output_json
+        })
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate valid JSON. Error: {e}")
+
+@app.post("/update_json/")
+async def update_json(updated_data: dict = Body(...)):
+    """Update the stored JSON data with user edits"""
+    global current_presentation_data
+    
+    try:
+        current_presentation_data = updated_data
+        return JSONResponse(content={
+            "message": "JSON data updated successfully.",
+            "json_data": current_presentation_data
+        })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update JSON data. Error: {e}")
+
+@app.get("/get_current_json/")
+async def get_current_json():
+    """Get the current stored JSON data"""
+    return JSONResponse(content={
+        "json_data": current_presentation_data
+    })
+
+@app.post("/generate_pptx_from_json/")
+async def generate_pptx_from_json():
+    """Generate PPTX presentation from the current stored JSON data"""
+    global current_presentation_data
+    
+    if not current_presentation_data:
+        raise HTTPException(status_code=400, detail="No JSON data available. Please generate content first.")
+    
+    try:
+        pptx_file_path = generate_pptx_presentation(current_presentation_data)
+        logger.info(f"Successfully generated PPTX presentation: {pptx_file_path}")
+        
+        return JSONResponse(content={
+            "message": "PPTX presentation generated successfully.",
+            "pptx_file": pptx_file_path,
+            "json_data": current_presentation_data
+        })
+    except Exception as e:
+        logger.error(f"Failed during PPTX generation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate PPTX. Error: {e}")
