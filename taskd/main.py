@@ -11,6 +11,9 @@ from langchain_core.output_parsers import StrOutputParser
 import logging
 from datetime import datetime
 from pptx import Presentation
+from pptx.chart.data import ChartData
+from pptx.enum.chart import XL_CHART_TYPE
+from pptx.util import Inches
 
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
@@ -125,6 +128,12 @@ def generate_pptx_presentation(data: dict) -> str:
                 max_height = Inches(4.0)  # Allow more height for overview
                 font_size = Pt(16)
                 char_per_line = 60  # More characters for wider width
+            elif placeholder_type == "chart_summary":
+                # For chart summary placeholder (Text Placeholder 2)
+                fixed_width = Inches(6.76)
+                max_height = Inches(4.0)  # Allow sufficient height for chart summaries
+                font_size = Pt(14)
+                char_per_line = 70  # More characters for wider width
             else:
                 # Default for other placeholders
                 fixed_width = Inches(6.5)
@@ -155,6 +164,156 @@ def generate_pptx_presentation(data: dict) -> str:
                         run.font.size = font_size
             
             logger.info(f"Adjusted {placeholder_type} placeholder to width: {fixed_width}, height: {new_height}, font: {font_size} for {len(text)} characters, {lines_needed} lines")
+        except Exception as e:
+            logger.error(f"Error adjusting placeholder height: {e}")
+
+    def create_chart_in_placeholder(placeholder, chart_data):
+        """
+        Create a chart from chart_data and insert it into the placeholder.
+        chart_data should follow the format from chart_json_output_format.json
+        """
+        try:
+            if not chart_data or not placeholder:
+                logger.warning("No chart data or placeholder provided")
+                return None
+                
+            # Check if this placeholder can accept charts
+            if not hasattr(placeholder, 'insert_chart'):
+                logger.warning(f"Placeholder {getattr(placeholder, 'name', 'unnamed')} cannot accept charts")
+                return None
+                
+            # Extract chart information
+            chart_type = chart_data.get("type", "").lower()
+            title = chart_data.get("title", "Chart")
+            x_values = chart_data.get("x", [])
+            y_values = chart_data.get("y", [])
+            labels = chart_data.get("labels", [])
+            sizes = chart_data.get("sizes", [])
+            
+            # Create ChartData object
+            chart_data_obj = ChartData()
+            
+            # Map chart types to python-pptx chart types
+            chart_type_mapping = {
+                "bar": XL_CHART_TYPE.COLUMN_CLUSTERED,
+                "column": XL_CHART_TYPE.COLUMN_CLUSTERED,
+                "line": XL_CHART_TYPE.LINE,
+                "pie": XL_CHART_TYPE.PIE,
+                "scatter": XL_CHART_TYPE.XY_SCATTER,
+                "area": XL_CHART_TYPE.AREA
+            }
+            
+            pptx_chart_type = chart_type_mapping.get(chart_type, XL_CHART_TYPE.COLUMN_CLUSTERED)
+            
+            # Set up chart data based on chart type
+            if chart_type == "pie" and labels and sizes:
+                # For pie charts, use labels as categories and sizes as values
+                chart_data_obj.categories = labels
+                chart_data_obj.add_series('Series 1', tuple(sizes))
+                
+            elif x_values and y_values:
+                # For other chart types, use x as categories and y as values
+                chart_data_obj.categories = x_values
+                chart_data_obj.add_series('Series 1', tuple(y_values))
+                
+            else:
+                # Fallback: create a simple chart with sample data if data is missing
+                logger.warning(f"Insufficient chart data for {chart_type}, using sample data")
+                chart_data_obj.categories = ['Category 1', 'Category 2', 'Category 3']
+                chart_data_obj.add_series('Series 1', (10, 20, 30))
+            
+            # Insert chart into placeholder
+            graphic_frame = placeholder.insert_chart(pptx_chart_type, chart_data_obj)
+            chart = graphic_frame.chart
+            
+            # Set chart title if provided
+            if title:
+                chart.has_title = True
+                chart.chart_title.text_frame.text = title
+                
+            logger.info(f"Successfully created {chart_type} chart with title '{title}'")
+            return chart
+            
+        except Exception as e:
+            logger.error(f"Error creating chart: {e}")
+            return None
+
+    def add_chart_to_slide(slide, chart_data, x=None, y=None, width=None, height=None):
+        """
+        Add a chart directly to slide using shapes.add_chart instead of placeholder.
+        This is a fallback when no chart placeholder is available.
+        """
+        try:
+            if not chart_data:
+                logger.warning("No chart data provided for direct chart creation")
+                return None
+                
+            # Extract chart information
+            chart_type = chart_data.get("type", "").lower()
+            title = chart_data.get("title", "Chart")
+            x_values = chart_data.get("x", [])
+            y_values = chart_data.get("y", [])
+            labels = chart_data.get("labels", [])
+            sizes = chart_data.get("sizes", [])
+            
+            # Create ChartData object
+            chart_data_obj = ChartData()
+            
+            # Map chart types to python-pptx chart types
+            chart_type_mapping = {
+                "bar": XL_CHART_TYPE.COLUMN_CLUSTERED,
+                "column": XL_CHART_TYPE.COLUMN_CLUSTERED,
+                "line": XL_CHART_TYPE.LINE,
+                "pie": XL_CHART_TYPE.PIE,
+                "scatter": XL_CHART_TYPE.XY_SCATTER,
+                "area": XL_CHART_TYPE.AREA
+            }
+            
+            pptx_chart_type = chart_type_mapping.get(chart_type, XL_CHART_TYPE.COLUMN_CLUSTERED)
+            
+            # Set up chart data based on chart type
+            if chart_type == "pie" and labels and sizes:
+                # For pie charts, use labels as categories and sizes as values
+                chart_data_obj.categories = labels
+                chart_data_obj.add_series('Series 1', tuple(sizes))
+                
+            elif x_values and y_values:
+                # For other chart types, use x as categories and y as values
+                chart_data_obj.categories = x_values
+                chart_data_obj.add_series('Series 1', tuple(y_values))
+                
+            else:
+                # Fallback: create a simple chart with sample data if data is missing
+                logger.warning(f"Insufficient chart data for {chart_type}, using sample data")
+                chart_data_obj.categories = ['Category 1', 'Category 2', 'Category 3']
+                chart_data_obj.add_series('Series 1', (10, 20, 30))
+            
+            # Set better default position and size if not provided
+            # Position chart to match the template specifications
+            if x is None:
+                x = Inches(5.41)  # Horizontal position from template
+            if y is None:
+                y = Inches(1.31)  # Vertical position from template
+            if width is None:
+                width = Inches(7.15)  # Width from template
+            if height is None:
+                height = Inches(3.71)  # Height from template
+            
+            # Add chart directly to slide
+            graphic_frame = slide.shapes.add_chart(pptx_chart_type, x, y, width, height, chart_data_obj)
+            chart = graphic_frame.chart
+            
+            # Set chart title if provided
+            if title:
+                chart.has_title = True
+                chart.chart_title.text_frame.text = title
+                
+            logger.info(f"Successfully added {chart_type} chart directly to slide with title '{title}' at position ({x}, {y})")
+            return chart
+            
+        except Exception as e:
+            logger.error(f"Error adding chart directly to slide: {e}")
+            return None
             
         except Exception as e:
             logger.warning(f"Could not adjust placeholder dimensions: {e}")
@@ -283,23 +442,156 @@ def generate_pptx_presentation(data: dict) -> str:
             else:
                 logger.warning("content_slides layout not found")
         
-        # 4. Generate Chart Slides (if needed in future)
-        # chart_slides = presentation_data.get("chart_slides", [])
-        # if chart_slides:
-        #     for chart_data in chart_slides:
-        #         layout = find_layout_by_name("chart_slides")
-        #         if layout:
-        #             slide = prs.slides.add_slide(layout)
+        # 4. Generate Chart Slides
+        chart_slides = presentation_data.get("chart_slides", [])
+        if chart_slides:
+            for chart_slide_data in chart_slides:
+                layout = find_layout_by_name("chart_slides")
+                logger.info(f"Looking for layout 'chart_slides', found: {layout is not None}")
+                if layout:
+                    slide = prs.slides.add_slide(layout)
+                    logger.info(f"Added chart slide, placeholders count: {len(slide.placeholders)}")
                     
-        #             # Set content title
-        #             title_placeholder = find_placeholder_by_name(slide, "content_title")
-        #             if title_placeholder and title_placeholder.has_text_frame:
-        #                 title_placeholder.text = chart_data.get("content_title", "")
+                    # Debug: list all placeholders
+                    for i, ph in enumerate(slide.placeholders):
+                        ph_name = getattr(ph, 'name', f'unnamed_{i}')
+                        logger.info(f"  Chart slide placeholder {i}: {ph_name}")
                     
-        #             # Set chart summary
-        #             summary_placeholder = find_placeholder_by_name(slide, "chart_summary")
-        #             if summary_placeholder and summary_placeholder.has_text_frame:
-        #                 summary_placeholder.text = chart_data.get("chart_summary", "")
+                    # Set content title (first placeholder - usually Title or Title 1)
+                    title_placeholder = None
+                    # Try common title placeholder names
+                    for title_name in ["Title", "Title 1", "content_title"]:
+                        title_placeholder = find_placeholder_by_name(slide, title_name)
+                        if title_placeholder:
+                            break
+                    
+                    if not title_placeholder and len(slide.placeholders) > 0:
+                        title_placeholder = slide.placeholders[0]  # Fallback to first placeholder
+                    
+                    if title_placeholder and title_placeholder.has_text_frame:
+                        content_title = chart_slide_data.get("content_title", "Chart Title")
+                        title_placeholder.text = content_title
+                        logger.info(f"Set chart title: {content_title}")
+                    
+                    # Find chart data and create charts
+                    chart_data_list = chart_slide_data.get("chart_data", [])
+                    if chart_data_list:
+                        # Find suitable placeholder for chart (usually second placeholder or one named chart/content)
+                        chart_placeholder = None
+                        
+                        # Try to find chart placeholder by name
+                        for chart_name in ["Chart", "Content Placeholder", "Subtitle", "chart_summary"]:
+                            chart_placeholder = find_placeholder_by_name(slide, chart_name)
+                            if chart_placeholder:
+                                break
+                        
+                        # If not found by name, try placeholders that can accept charts
+                        if not chart_placeholder:
+                            for placeholder in slide.placeholders:
+                                try:
+                                    # Check if this placeholder can accept charts
+                                    if hasattr(placeholder, 'insert_chart'):
+                                        chart_placeholder = placeholder
+                                        break
+                                except:
+                                    continue
+                        
+                        # If still not found, use second placeholder as fallback
+                        if not chart_placeholder and len(slide.placeholders) > 1:
+                            chart_placeholder = slide.placeholders[1]
+                        
+                        if chart_placeholder and chart_data_list:
+                            # Create chart from first chart data entry
+                            chart_data = chart_data_list[0] if isinstance(chart_data_list, list) else chart_data_list
+                            created_chart = None
+                            
+                            try:
+                                # First try to create chart in placeholder
+                                created_chart = create_chart_in_placeholder(chart_placeholder, chart_data)
+                                if created_chart:
+                                    logger.info("Successfully created chart in placeholder")
+                                else:
+                                    logger.warning("Placeholder doesn't support charts, trying direct chart creation")
+                                    # Fallback: add chart directly to slide with template positioning
+                                    created_chart = add_chart_to_slide(slide, chart_data, Inches(5.41), Inches(1.31), Inches(7.15), Inches(3.71))
+                                    if created_chart:
+                                        logger.info("Successfully created chart directly on slide")
+                                    else:
+                                        logger.warning("Failed to create chart both in placeholder and directly")
+                                        
+                            except Exception as e:
+                                logger.error(f"Error creating chart: {e}")
+                                # Final fallback: add chart directly to slide
+                                try:
+                                    created_chart = add_chart_to_slide(slide, chart_data, Inches(5.41), Inches(1.31), Inches(7.15), Inches(3.71))
+                                    if created_chart:
+                                        logger.info("Successfully created chart directly on slide as fallback")
+                                    else:
+                                        # Ultimate fallback: add chart summary as text
+                                        if chart_placeholder and chart_placeholder.has_text_frame:
+                                            summary = chart_slide_data.get("chart_summary", "Chart data visualization")
+                                            chart_placeholder.text = summary
+                                            logger.info("Added chart summary as text fallback")
+                                except Exception as e2:
+                                    logger.error(f"All chart creation methods failed: {e2}")
+                                    # Ultimate fallback: add chart summary as text
+                                    if chart_placeholder and chart_placeholder.has_text_frame:
+                                        summary = chart_slide_data.get("chart_summary", "Chart data visualization")
+                                        chart_placeholder.text = summary
+                                        logger.info("Added chart summary as text fallback")
+                        
+                        else:
+                            # No suitable placeholder found, add chart directly to slide
+                            chart_data = chart_data_list[0] if isinstance(chart_data_list, list) else chart_data_list
+                            try:
+                                created_chart = add_chart_to_slide(slide, chart_data, Inches(5.41), Inches(1.31), Inches(7.15), Inches(3.71))
+                                if created_chart:
+                                    logger.info("Successfully created chart directly on slide (no suitable placeholder)")
+                                else:
+                                    logger.warning("Failed to create chart directly on slide")
+                            except Exception as e:
+                                logger.error(f"Error creating chart directly on slide: {e}")
+                        
+                        # Add chart summary to Text Placeholder 2
+                        chart_summary = chart_slide_data.get("chart_summary", "")
+                        if chart_summary:
+                            # Find Text Placeholder 2 specifically for chart summary
+                            summary_placeholder = find_placeholder_by_name(slide, "Text Placeholder 2")
+                            if summary_placeholder and summary_placeholder.has_text_frame:
+                                summary_placeholder.text = chart_summary
+                                adjust_placeholder_height(summary_placeholder, chart_summary, "chart_summary")
+                                logger.info(f"Added chart summary to Text Placeholder 2: {chart_summary[:50]}...")
+                            else:
+                                logger.warning("Text Placeholder 2 not found for chart summary")
+                                # Fallback: Look for any remaining text placeholders for summary
+                                for placeholder in slide.placeholders:
+                                    if (placeholder != title_placeholder and 
+                                        placeholder != chart_placeholder and 
+                                        placeholder.has_text_frame and 
+                                        not placeholder.text.strip()):
+                                        placeholder.text = chart_summary
+                                        logger.info(f"Added chart summary to fallback placeholder: {chart_summary[:50]}...")
+                                        break
+                    
+                    else:
+                        # No chart data provided, add summary text to Text Placeholder 2
+                        chart_summary = chart_slide_data.get("chart_summary", "")
+                        if chart_summary:
+                            summary_placeholder = find_placeholder_by_name(slide, "Text Placeholder 2")
+                            if summary_placeholder and summary_placeholder.has_text_frame:
+                                summary_placeholder.text = chart_summary
+                                adjust_placeholder_height(summary_placeholder, chart_summary, "chart_summary")
+                                logger.info(f"Added chart summary to Text Placeholder 2: {chart_summary[:50]}...")
+                            else:
+                                logger.warning("Text Placeholder 2 not found, trying fallback")
+                                # Fallback to any available text placeholder
+                                if len(slide.placeholders) > 1:
+                                    summary_placeholder = slide.placeholders[1]
+                                    if summary_placeholder and summary_placeholder.has_text_frame:
+                                        summary_placeholder.text = chart_summary
+                                        logger.info(f"Added chart summary text to fallback placeholder: {chart_summary[:50]}...")
+                else:
+                    logger.warning("chart_slides layout not found")
         
         # 5. Generate Final Slide (Next Steps)
         final_data = presentation_data.get("final_slide", {})
@@ -415,8 +707,21 @@ async def make_slides(
     ],
     "chart_slides": [
       {
-        "content_title": "The title for the slide containing the chart in Azerbaijani.",
-        "chart_summary": "A summary or explanation of what the chart represents in Azerbaijani."
+        "content_title": "Maliyyə Göstəriciləri Analizi",
+        "chart_summary": "Bu qrafik maliyyə göstəricilərinin il boyu dinamikasını göstərir və əsas tendensiyaları analiz edir.",
+        "chart_data": [
+          {
+            "type": "bar",
+            "title": "Aylıq Gəlir Statistikası",
+            "description": "Son 6 ayın gəlir məlumatları",
+            "xlabel": "Aylar",
+            "ylabel": "Gəlir (min manat)",
+            "x": ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun"],
+            "y": [120, 150, 180, 200, 175, 220],
+            "labels": [],
+            "sizes": []
+          }
+        ]
       }
     ],
     "final_slide": {
@@ -509,6 +814,42 @@ async def test_pptx_generation():
                     ]
                 }
             ],
+            "chart_slides": [
+                {
+                    "content_title": "Test Qrafik Analizi",
+                    "chart_summary": "Bu qrafik test məlumatlarının dinamikasını göstərir və sistemin qrafik yaratma qabiliyyətini sınayır.",
+                    "chart_data": [
+                        {
+                            "type": "bar",
+                            "title": "Aylıq Performans Statistikası",
+                            "description": "Son 6 ayın performans göstəriciləri",
+                            "xlabel": "Aylar",
+                            "ylabel": "Dəyər (faiz)",
+                            "x": ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun"],
+                            "y": [85, 92, 78, 95, 88, 91],
+                            "labels": [],
+                            "sizes": []
+                        }
+                    ]
+                },
+                {
+                    "content_title": "Bölgü Analizi",
+                    "chart_summary": "Bu dairəvi qrafik müxtəlif kateqoriyaların paylanmasını göstərir.",
+                    "chart_data": [
+                        {
+                            "type": "pie",
+                            "title": "Resurs Bölgüsü",
+                            "description": "Layihə resurslarının kateqoriyalar üzrə bölünməsi",
+                            "xlabel": "",
+                            "ylabel": "",
+                            "x": [],
+                            "y": [],
+                            "labels": ["İnkişaf", "Test", "Dizayn", "Məlumat"],
+                            "sizes": [40, 25, 20, 15]
+                        }
+                    ]
+                }
+            ],
             "final_slide": {
                 "next_steps": [
                     "Növbəti addım: Test nəticələrini yoxlamaq",
@@ -594,8 +935,21 @@ async def generate_json_only(
     ],
     "chart_slides": [
       {
-        "content_title": "The title for the slide containing the chart in Azerbaijani.",
-        "chart_summary": "A summary or explanation of what the chart represents in Azerbaijani."
+        "content_title": "Xidmət Keyfiyyəti Analizi",
+        "chart_summary": "Bu qrafik müştəri məmnunluğu və xidmət keyfiyyəti göstəricilərini təqdim edir.",
+        "chart_data": [
+          {
+            "type": "pie",
+            "title": "Müştəri Məmnunluğu Paylanması",
+            "description": "Müştəri rəylərinin təhlili",
+            "xlabel": "",
+            "ylabel": "",
+            "x": [],
+            "y": [],
+            "labels": ["Çox Razı", "Razı", "Neytral", "Narazı"],
+            "sizes": [45, 35, 15, 5]
+          }
+        ]
       }
     ],
     "final_slide": {

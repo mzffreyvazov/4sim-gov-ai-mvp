@@ -34,7 +34,20 @@
     "chart_slides": [
       {
         "content_title": "The title for the slide containing the chart in Azerbaijani.",
-        "chart_summary": "A summary or explanation of what the chart represents in Azerbaijani."
+        "chart_summary": "A summary or explanation of what the chart represents in Azerbaijani.",
+        "chart_data": [
+          {
+            "type": "bar",
+            "title": "Sample Chart Title",
+            "description": "Chart description",
+            "xlabel": "X-axis label",
+            "ylabel": "Y-axis label",
+            "x": ["Category 1", "Category 2", "Category 3"],
+            "y": [10, 20, 15],
+            "labels": [],
+            "sizes": []
+          }
+        ]
       }
     ],
     "final_slide": {
