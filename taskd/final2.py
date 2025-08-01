@@ -422,10 +422,7 @@ def generate_pptx_presentation(data: dict) -> str:
                 
                 next_steps = final_data.get("next_steps", [])
                 if next_steps:
-                    # Create formatted next steps text
-                    next_steps_text = "\n".join([f"• {step}" for step in next_steps])
-                    
-                    # Try to find next_steps placeholder - first try "Subtitle 2", then try other common names
+                    # Try to find next_steps placeholder
                     next_steps_placeholder = (
                         find_placeholder_by_name(slide, "Subtitle 1")
                     )
@@ -451,8 +448,16 @@ def generate_pptx_presentation(data: dict) -> str:
                             paragraph.text = f"• {step}"
                             paragraph.level = 0
                         
-                        # Adjust height based on bullet points length
-                        adjust_placeholder_height(next_steps_placeholder, next_steps_text, "default")
+                        # Set font size to 16 for all paragraphs in next_steps
+                        try:
+                            from pptx.util import Pt
+                            for paragraph in text_frame.paragraphs:
+                                for run in paragraph.runs:
+                                    run.font.size = Pt(16)
+                        except Exception as e:
+                            logger.warning(f"Could not set font size for next_steps: {e}")
+                        
+                        # Do not adjust placeholder dimensions - keep original size and position
                         logger.info(f"Set next steps with {len(next_steps)} items")
                     else:
                         logger.warning("Could not populate next_steps - no suitable placeholder found")
@@ -616,7 +621,15 @@ async def test_pptx_generation():
             "final_slide": {
                 "next_steps": [
                     "Növbəti addım: Test nəticələrini yoxlamaq",
-                    "İkinci addım: Real məlumatlarla test etmək"
+                    "İkinci addım: Real məlumatlarla test etmək",
+                    "Üçüncü addım: Nəticələri təhlil etmək",
+                    "Dördüncü addım: Gələcək inkişaf planlarını müzakirə etmək",
+                    "Beşinci addım: Təqdimatı təqdim etmək",
+                    "Altıncı addım: İstifadəçi rəylərini toplamaq",
+                    "Yeddinci addım: Təqdimatın təkmilləşdirilməsi üçün təkliflər hazırlamaq",
+                    "Səkkizinci addım: Təqdimatın son versiyasını yayımlamaq",
+                    "Doqquzuncu addım: Təqdimatın nəticələrini qiymətləndirmək",
+                    "Onuncu addım: Gələcək layihələr üçün dərslər çıxarmaq"
                 ]
             }
         }
