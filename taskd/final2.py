@@ -528,7 +528,10 @@ async def make_slides(
     "final_slide": {
       "next_steps": [
         "First next step or action item in Azerbaijani.",
-        "Second next step or action item in Azerbaijani."
+        "Second next step or action item in Azerbaijani.",
+        "Third next step or action item in Azerbaijani.",
+        "Fourth next step or action item in Azerbaijani.",
+        "Fifth next step or action item in Azerbaijani."
       ]
     }
   }
@@ -541,7 +544,8 @@ async def make_slides(
             "**CRITICAL RULES:**\n"
             "1. `content_slides` array MUST contain EXACTLY {slide_count} objects.\n"
             "2. Inside EACH `content_slides` object, the `contents` array MUST contain EXACTLY 4 objects.\n"
-            "3. The `presentation_title` in `intro_slide` MUST be a maximum of 4 words.\n\n"
+            "3. The `presentation_title` in `intro_slide` MUST be a maximum of 4 words.\n"
+            "4. The `next_steps` array in `final_slide` MUST contain AT LEAST 5 items.\n\n"
             "Return ONLY a single valid JSON object.\n\nJSON Format Example:\n{json_format}"
         )
     )
