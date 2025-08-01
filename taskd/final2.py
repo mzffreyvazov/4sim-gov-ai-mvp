@@ -224,17 +224,17 @@ def generate_pptx_presentation(data: dict) -> str:
                 max_height = Inches(2.40)
                 font_size = Pt(14)
                 char_per_line = 30  # Shorter lines for narrower width
-            elif placeholder_type == "overview":
+            elif placeholder_type == "overview"  or  placeholder_type == "goal":
                 # For presentation_overview placeholder
                 fixed_width = Inches(5.55)
                 max_height = Inches(4.0)  # Allow more height for overview
-                font_size = Pt(12)
+                font_size = Pt(16)
                 char_per_line = 60  # More characters for wider width
             else:
                 # Default for other placeholders
-                fixed_width = Inches(4.0)
+                fixed_width = Inches(6.5)
                 max_height = Inches(4.0)
-                font_size = Pt(12)
+                font_size = Pt(16)
                 char_per_line = 50
             
             # Set fixed width
@@ -324,7 +324,7 @@ def generate_pptx_presentation(data: dict) -> str:
                 if goal_placeholder and goal_placeholder.has_text_frame:
                     goal_text = content_goal_data.get("presentation_goal", "")
                     goal_placeholder.text = goal_text
-                    adjust_placeholder_height(goal_placeholder, goal_text, "default")
+                    adjust_placeholder_height(goal_placeholder, goal_text, "goal")
                     logger.info(f"Set goal text length: {len(goal_text)}")
             else:
                 logger.warning("project_content_slide layout not found")
@@ -425,16 +425,37 @@ def generate_pptx_presentation(data: dict) -> str:
                     # Create formatted next steps text
                     next_steps_text = "\n".join([f"• {step}" for step in next_steps])
                     
-                    # Try to find next_steps placeholder (using second placeholder "Subtitle 2")
-                    next_steps_placeholder = find_placeholder_by_name(slide, "Subtitle 2")
+                    # Try to find next_steps placeholder - first try "Subtitle 2", then try other common names
+                    next_steps_placeholder = (
+                        find_placeholder_by_name(slide, "Subtitle 1")
+                    )
+                    
                     logger.info(f"Found next_steps placeholder: {next_steps_placeholder is not None}")
                     if next_steps_placeholder and next_steps_placeholder.has_text_frame:
-                        next_steps_placeholder.text = next_steps_text
+                        # Clear any existing text first
+                        next_steps_placeholder.text = ""
+                        
+                        # Add text properly to the text frame
+                        text_frame = next_steps_placeholder.text_frame
+                        text_frame.clear()
+                        
+                        # Add each next step as a separate paragraph with bullet
+                        for i, step in enumerate(next_steps):
+                            if i == 0:
+                                # Use the first paragraph that already exists
+                                paragraph = text_frame.paragraphs[0]
+                            else:
+                                # Add new paragraphs for additional steps
+                                paragraph = text_frame.add_paragraph()
+                            
+                            paragraph.text = f"• {step}"
+                            paragraph.level = 0
+                        
                         # Adjust height based on bullet points length
                         adjust_placeholder_height(next_steps_placeholder, next_steps_text, "default")
-                        logger.info(f"Set next steps text length: {len(next_steps_text)}")
+                        logger.info(f"Set next steps with {len(next_steps)} items")
                     else:
-                        logger.warning("Could not populate next_steps")
+                        logger.warning("Could not populate next_steps - no suitable placeholder found")
             else:
                 logger.warning("final_slide layout not found")
         
