@@ -14,19 +14,19 @@
         "contents": [
           {
             "title": "Punkt A",
-            "content": "A 2-3 sentence explanation for the first point in Azerbaijani."
+            "content-1": "A 2-3 sentence explanation for the first point in Azerbaijani."
           },
           {
             "title": "Punkt B",
-            "content": "A 2-3 sentence explanation for the second point in Azerbaijani."
+            "content-2": "A 2-3 sentence explanation for the second point in Azerbaijani."
           },
           {
             "title": "Punkt C",
-            "content": "A 2-3 sentence explanation for the third point in Azerbaijani."
+            "content-3": "A 2-3 sentence explanation for the third point in Azerbaijani."
           },
           {
             "title": "Punkt D",
-            "content": "A 2-3 sentence explanation for the fourth point in Azerbaijani."
+            "content-4": "A 2-3 sentence explanation for the fourth point in Azerbaijani."
           }
         ]
       }
