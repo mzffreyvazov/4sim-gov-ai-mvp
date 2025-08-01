@@ -12,8 +12,8 @@ import logging
 from datetime import datetime
 from pptx import Presentation
 from pptx.chart.data import ChartData
-from pptx.enum.chart import XL_CHART_TYPE
-from pptx.util import Inches
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+from pptx.util import Inches, Pt
 
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
@@ -167,6 +167,58 @@ def generate_pptx_presentation(data: dict) -> str:
         except Exception as e:
             logger.error(f"Error adjusting placeholder height: {e}")
 
+    def configure_chart_legend(chart, chart_type: str):
+        """
+        Configure chart legend settings for better visibility.
+        """
+        try:
+            # Enable legend for all charts
+            chart.has_legend = True
+            
+            # Position legend based on chart type
+            if chart_type == "pie":
+                # For pie charts, place legend on the right side
+                chart.legend.position = XL_LEGEND_POSITION.RIGHT
+                
+                # Enable data labels with percentages for pie charts
+                try:
+                    # Get the first (and usually only) series in the chart
+                    if len(chart.series) > 0:
+                        series = chart.series[0]
+                        # Enable data labels
+                        series.has_data_labels = True
+                        data_labels = series.data_labels
+                        
+                        # Configure data labels to show percentages
+                        data_labels.show_percentage = True
+                        data_labels.show_value = False  # Hide raw values, show only percentages
+                        data_labels.show_category_name = False  # Category names are in legend
+                        
+                        # Set data label font size
+                        if hasattr(data_labels, 'font'):
+                            data_labels.font.size = Pt(8)
+                            data_labels.font.bold = True
+                        
+                        logger.info("Enabled percentage data labels for pie chart")
+                except Exception as label_error:
+                    logger.warning(f"Could not configure pie chart data labels: {label_error}")
+                    
+            else:
+                # For other charts, place legend at the bottom
+                chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+            
+            # Don't include legend in layout calculations to prevent chart size reduction
+            chart.legend.include_in_layout = False
+            
+            # Configure legend font (if available)
+            if hasattr(chart.legend, 'font'):
+                chart.legend.font.size = Pt(8)  # Set readable font size
+                
+            logger.info(f"Configured legend for {chart_type} chart")
+            
+        except Exception as e:
+            logger.warning(f"Could not fully configure legend: {e}")
+
     def create_chart_in_placeholder(placeholder, chart_data):
         """
         Create a chart from chart_data and insert it into the placeholder.
@@ -230,6 +282,9 @@ def generate_pptx_presentation(data: dict) -> str:
             if title:
                 chart.has_title = True
                 chart.chart_title.text_frame.text = title
+            
+            # Configure legend for better visibility
+            configure_chart_legend(chart, chart_type)
                 
             logger.info(f"Successfully created {chart_type} chart with title '{title}'")
             return chart
@@ -307,6 +362,9 @@ def generate_pptx_presentation(data: dict) -> str:
             if title:
                 chart.has_title = True
                 chart.chart_title.text_frame.text = title
+            
+            # Configure legend for better visibility
+            configure_chart_legend(chart, chart_type)
                 
             logger.info(f"Successfully added {chart_type} chart directly to slide with title '{title}' at position ({x}, {y})")
             return chart
@@ -722,6 +780,23 @@ async def make_slides(
             "sizes": []
           }
         ]
+      },
+      {
+        "content_title": "Resurs Bölgüsü Analizi",
+        "chart_summary": "Bu dairəvi qrafik layihə resurslarının müxtəlif kateqoriyalar üzrə bölünməsini göstərir.",
+        "chart_data": [
+          {
+            "type": "pie",
+            "title": "Layihə Resursları Paylanması",
+            "description": "Resursların kateqoriyalar üzrə faiz payı",
+            "xlabel": "",
+            "ylabel": "",
+            "x": [],
+            "y": [],
+            "labels": ["İnkişaf", "Test", "Dizayn", "Məlumat", "İdarəetmə"],
+            "sizes": [35, 25, 20, 15, 5]
+          }
+        ]
       }
     ],
     "final_slide": {
@@ -744,7 +819,13 @@ async def make_slides(
             "1. `content_slides` array MUST contain EXACTLY {slide_count} objects.\n"
             "2. Inside EACH `content_slides` object, the `contents` array MUST contain EXACTLY 4 objects.\n"
             "3. The `presentation_title` in `intro_slide` MUST be a maximum of 4 words.\n"
-            "4. The `next_steps` array in `final_slide` MUST contain AT LEAST 5 items.\n\n"
+            "4. The `next_steps` array in `final_slide` MUST contain AT LEAST 5 items.\n"
+            "5. **MANDATORY**: The `chart_slides` array MUST contain EXACTLY 2 chart slide objects.\n"
+            "6. **MANDATORY**: First chart MUST be type 'bar' with realistic data based on document content.\n"
+            "7. **MANDATORY**: Second chart MUST be type 'pie' with realistic data based on document content.\n"
+            "8. Each chart MUST have meaningful titles, labels, and data that relate to the document content.\n"
+            "9. For bar charts: provide x and y arrays with at least 4-6 data points.\n"
+            "10. For pie charts: provide labels and sizes arrays that sum to 100 (percentages).\n\n"
             "Return ONLY a single valid JSON object.\n\nJSON Format Example:\n{json_format}"
         )
     )
@@ -935,19 +1016,36 @@ async def generate_json_only(
     ],
     "chart_slides": [
       {
-        "content_title": "Xidmət Keyfiyyəti Analizi",
-        "chart_summary": "Bu qrafik müştəri məmnunluğu və xidmət keyfiyyəti göstəricilərini təqdim edir.",
+        "content_title": "Maliyyə Göstəriciləri Analizi",
+        "chart_summary": "Bu qrafik maliyyə göstəricilərinin il boyu dinamikasını göstərir və əsas tendensiyaları analiz edir.",
+        "chart_data": [
+          {
+            "type": "bar",
+            "title": "Aylıq Gəlir Statistikası",
+            "description": "Son 6 ayın gəlir məlumatları",
+            "xlabel": "Aylar",
+            "ylabel": "Gəlir (min manat)",
+            "x": ["Yanvar", "Fevral", "Mart", "Aprel", "May", "İyun"],
+            "y": [120, 150, 180, 200, 175, 220],
+            "labels": [],
+            "sizes": []
+          }
+        ]
+      },
+      {
+        "content_title": "Resurs Bölgüsü Analizi",
+        "chart_summary": "Bu dairəvi qrafik layihə resurslarının müxtəlif kateqoriyalar üzrə bölünməsini göstərir.",
         "chart_data": [
           {
             "type": "pie",
-            "title": "Müştəri Məmnunluğu Paylanması",
-            "description": "Müştəri rəylərinin təhlili",
+            "title": "Layihə Resursları Paylanması",
+            "description": "Resursların kateqoriyalar üzrə faiz payı",
             "xlabel": "",
             "ylabel": "",
             "x": [],
             "y": [],
-            "labels": ["Çox Razı", "Razı", "Neytral", "Narazı"],
-            "sizes": [45, 35, 15, 5]
+            "labels": ["İnkişaf", "Test", "Dizayn", "Məlumat", "İdarəetmə"],
+            "sizes": [35, 25, 20, 15, 5]
           }
         ]
       }
@@ -973,7 +1071,13 @@ async def generate_json_only(
             "1. `content_slides` array MUST contain EXACTLY {slide_count} objects.\n"
             "2. Inside EACH `content_slides` object, the `contents` array MUST contain EXACTLY 4 objects.\n"
             "3. The `presentation_title` in `intro_slide` MUST be a maximum of 4 words.\n"
-            "4. The `next_steps` array in `final_slide` MUST contain AT LEAST 5 items.\n\n"
+            "4. The `next_steps` array in `final_slide` MUST contain AT LEAST 5 items.\n"
+            "5. **MANDATORY**: The `chart_slides` array MUST contain EXACTLY 2 chart slide objects.\n"
+            "6. **MANDATORY**: First chart MUST be type 'bar' with realistic data based on document content.\n"
+            "7. **MANDATORY**: Second chart MUST be type 'pie' with realistic data based on document content.\n"
+            "8. Each chart MUST have meaningful titles, labels, and data that relate to the document content.\n"
+            "9. For bar charts: provide x and y arrays with at least 4-6 data points.\n"
+            "10. For pie charts: provide labels and sizes arrays that sum to 100 (percentages).\n\n"
             "Return ONLY a single valid JSON object.\n\nJSON Format Example:\n{json_format}"
         )
     )

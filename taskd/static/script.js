@@ -40,6 +40,16 @@ function setButtonLoading(button, isLoading) {
 uploadForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    // Preserve form values
+    const fileInput = document.getElementById('file-input');
+    const promptInput = document.getElementById('prompt-input');
+    const slideCountInput = document.getElementById('slide-count-input');
+    
+    const formValues = {
+        prompt: promptInput.value,
+        slideCount: slideCountInput.value
+    };
+    
     setButtonLoading(generateBtn, true);
     showMessage('Uploading document and generating content...', 'info');
     
@@ -59,12 +69,20 @@ uploadForm.addEventListener('submit', async (e) => {
             displaySlides(currentData);
             editSection.style.display = 'block';
             editSection.scrollIntoView({ behavior: 'smooth' });
+            
+            // Restore form values
+            promptInput.value = formValues.prompt;
+            slideCountInput.value = formValues.slideCount;
         } else {
             throw new Error(result.detail || 'Failed to generate content');
         }
     } catch (error) {
         console.error('Error:', error);
         showMessage(`Error: ${error.message}`, 'error');
+        
+        // Restore form values even on error
+        promptInput.value = formValues.prompt;
+        slideCountInput.value = formValues.slideCount;
     } finally {
         setButtonLoading(generateBtn, false);
     }
@@ -102,14 +120,26 @@ function displaySlides(data) {
         presentation.content_slides.forEach((slide, index) => {
             const contentSlide = createSlideCard(
                 slideNumber++,
-                `📊 Content Slide ${index + 1}`,
+                `📋 Content Slide ${index + 1}`,
                 createContentSlideContent(slide, index)
             );
             slidesContainer.appendChild(contentSlide);
         });
     }
     
-    // 4. Final Slide
+    // 4. Chart Slides
+    if (presentation.chart_slides) {
+        presentation.chart_slides.forEach((slide, index) => {
+            const chartSlide = createSlideCard(
+                slideNumber++,
+                `📊 Chart Slide ${index + 1}`,
+                createChartSlideContent(slide, index)
+            );
+            slidesContainer.appendChild(chartSlide);
+        });
+    }
+    
+    // 5. Final Slide
     if (presentation.final_slide) {
         const finalSlide = createSlideCard(
             slideNumber++,
@@ -194,6 +224,91 @@ function createContentSlideContent(data, slideIndex) {
     return contentHtml;
 }
 
+// Create chart slide content
+function createChartSlideContent(data, slideIndex) {
+    let chartHtml = `
+        <div>
+            <label><strong>Chart Title:</strong></label>
+            <div class="editable title" data-path="presentation.chart_slides.${slideIndex}.content_title" contenteditable="true">${data.content_title || ''}</div>
+        </div>
+        <div>
+            <label><strong>Chart Summary:</strong></label>
+            <div class="editable overview" data-path="presentation.chart_slides.${slideIndex}.chart_summary" contenteditable="true">${data.chart_summary || ''}</div>
+        </div>
+    `;
+    
+    if (data.chart_data && data.chart_data.length > 0) {
+        const chartData = data.chart_data[0];
+        const chartId = `chart-${slideIndex}-${Date.now()}`;
+        
+        chartHtml += `
+            <div class="chart-section">
+                <label><strong>Chart Preview:</strong></label>
+                <div class="chart-container">
+                    <canvas id="${chartId}" width="400" height="200"></canvas>
+                </div>
+                <div class="chart-data-editor">
+                    <label><strong>Chart Data:</strong></label>
+                    <div class="form-group">
+                        <label>Chart Type:</label>
+                        <select class="chart-type-select" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.type">
+                            <option value="bar" ${chartData.type === 'bar' ? 'selected' : ''}>Bar Chart</option>
+                            <option value="pie" ${chartData.type === 'pie' ? 'selected' : ''}>Pie Chart</option>
+                            <option value="line" ${chartData.type === 'line' ? 'selected' : ''}>Line Chart</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Chart Title:</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.title" value="${chartData.title || ''}" />
+                    </div>
+        `;
+        
+        if (chartData.type === 'pie') {
+            chartHtml += `
+                    <div class="form-group">
+                        <label>Labels (comma-separated):</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.labels" value="${(chartData.labels || []).join(', ')}" />
+                    </div>
+                    <div class="form-group">
+                        <label>Values (comma-separated):</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.sizes" value="${(chartData.sizes || []).join(', ')}" />
+                    </div>
+            `;
+        } else {
+            chartHtml += `
+                    <div class="form-group">
+                        <label>X-axis Label:</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.xlabel" value="${chartData.xlabel || ''}" />
+                    </div>
+                    <div class="form-group">
+                        <label>Y-axis Label:</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.ylabel" value="${chartData.ylabel || ''}" />
+                    </div>
+                    <div class="form-group">
+                        <label>X Values (comma-separated):</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.x" value="${(chartData.x || []).join(', ')}" />
+                    </div>
+                    <div class="form-group">
+                        <label>Y Values (comma-separated):</label>
+                        <input type="text" class="editable-input" data-path="presentation.chart_slides.${slideIndex}.chart_data.0.y" value="${(chartData.y || []).join(', ')}" />
+                    </div>
+            `;
+        }
+        
+        chartHtml += `
+                </div>
+            </div>
+        `;
+        
+        // Store chart info for later rendering
+        setTimeout(() => {
+            renderChart(chartId, chartData);
+        }, 100);
+    }
+    
+    return chartHtml;
+}
+
 // Create final slide content
 function createFinalSlideContent(data) {
     let nextStepsHtml = '<div><label><strong>Next Steps:</strong></label><ul class="next-steps-list">';
@@ -227,8 +342,216 @@ document.addEventListener('input', (e) => {
         window.saveTimeout = setTimeout(() => {
             saveDataToBackend();
         }, 1000);
+    } else if (e.target.classList.contains('editable-input')) {
+        const path = e.target.getAttribute('data-path');
+        let value = e.target.value;
+        
+        // Handle array inputs (comma-separated values)
+        if (path.includes('.labels') || path.includes('.sizes') || path.includes('.x') || path.includes('.y')) {
+            value = value.split(',').map(item => {
+                const trimmed = item.trim();
+                // Try to convert to number if it looks like a number
+                const num = parseFloat(trimmed);
+                return isNaN(num) ? trimmed : num;
+            });
+        }
+        
+        updateDataAtPath(currentData, path, value);
+        
+        // Debounced save to backend
+        clearTimeout(window.saveTimeout);
+        window.saveTimeout = setTimeout(() => {
+            saveDataToBackend();
+        }, 1000);
+        
+        // Re-render chart if chart data changed
+        if (path.includes('chart_data')) {
+            const slideIndex = path.match(/chart_slides\.(\d+)\./)[1];
+            const chartId = document.querySelector(`[id^="chart-${slideIndex}-"]`).id;
+            const chartData = getChartDataFromPath(currentData, slideIndex);
+            renderChart(chartId, chartData);
+        }
     }
 });
+
+// Handle chart type changes
+document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('chart-type-select')) {
+        const path = e.target.getAttribute('data-path');
+        const value = e.target.value;
+        updateDataAtPath(currentData, path, value);
+        saveDataToBackend();
+        
+        // Re-render chart
+        const slideIndex = path.match(/chart_slides\.(\d+)\./)[1];
+        const chartId = document.querySelector(`[id^="chart-${slideIndex}-"]`).id;
+        const chartData = getChartDataFromPath(currentData, slideIndex);
+        renderChart(chartId, chartData);
+    }
+});
+
+// Chart rendering function
+function renderChart(canvasId, chartData) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Simple chart rendering without external libraries
+    const padding = 40;
+    const chartArea = {
+        x: padding,
+        y: padding,
+        width: canvas.width - 2 * padding,
+        height: canvas.height - 2 * padding
+    };
+    
+    if (chartData.type === 'pie') {
+        renderPieChart(ctx, chartArea, chartData);
+    } else if (chartData.type === 'bar') {
+        renderBarChart(ctx, chartArea, chartData);
+    } else if (chartData.type === 'line') {
+        renderLineChart(ctx, chartArea, chartData);
+    }
+}
+
+// Render pie chart
+function renderPieChart(ctx, chartArea, data) {
+    const centerX = chartArea.x + chartArea.width / 2;
+    const centerY = chartArea.y + chartArea.height / 2;
+    const radius = Math.min(chartArea.width, chartArea.height) / 3;
+    
+    const labels = data.labels || [];
+    const sizes = data.sizes || [];
+    const total = sizes.reduce((sum, size) => sum + size, 0);
+    
+    if (total === 0) return;
+    
+    let currentAngle = -Math.PI / 2; // Start at top
+    const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+    
+    // Draw pie slices
+    sizes.forEach((size, index) => {
+        const sliceAngle = (size / total) * 2 * Math.PI;
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = colors[index % colors.length];
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw label
+        const labelAngle = currentAngle + sliceAngle / 2;
+        const labelX = centerX + Math.cos(labelAngle) * (radius * 0.7);
+        const labelY = centerY + Math.sin(labelAngle) * (radius * 0.7);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${labels[index] || ''}`, labelX, labelY);
+        
+        currentAngle += sliceAngle;
+    });
+}
+
+// Render bar chart
+function renderBarChart(ctx, chartArea, data) {
+    const xValues = data.x || [];
+    const yValues = data.y || [];
+    
+    if (xValues.length === 0 || yValues.length === 0) return;
+    
+    const maxY = Math.max(...yValues);
+    const barWidth = chartArea.width / xValues.length * 0.8;
+    const barSpacing = chartArea.width / xValues.length * 0.2;
+    
+    // Draw bars
+    xValues.forEach((label, index) => {
+        const value = yValues[index] || 0;
+        const barHeight = (value / maxY) * chartArea.height;
+        const x = chartArea.x + index * (barWidth + barSpacing) + barSpacing / 2;
+        const y = chartArea.y + chartArea.height - barHeight;
+        
+        // Draw bar
+        ctx.fillStyle = '#36A2EB';
+        ctx.fillRect(x, y, barWidth, barHeight);
+        
+        // Draw label
+        ctx.fillStyle = '#333';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, x + barWidth / 2, chartArea.y + chartArea.height + 15);
+        
+        // Draw value
+        ctx.fillText(value.toString(), x + barWidth / 2, y - 5);
+    });
+    
+    // Draw axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartArea.x, chartArea.y + chartArea.height);
+    ctx.lineTo(chartArea.x + chartArea.width, chartArea.y + chartArea.height);
+    ctx.moveTo(chartArea.x, chartArea.y);
+    ctx.lineTo(chartArea.x, chartArea.y + chartArea.height);
+    ctx.stroke();
+}
+
+// Render line chart
+function renderLineChart(ctx, chartArea, data) {
+    const xValues = data.x || [];
+    const yValues = data.y || [];
+    
+    if (xValues.length === 0 || yValues.length === 0) return;
+    
+    const maxY = Math.max(...yValues);
+    const minY = Math.min(...yValues);
+    const range = maxY - minY || 1;
+    
+    // Draw line
+    ctx.strokeStyle = '#36A2EB';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    
+    yValues.forEach((value, index) => {
+        const x = chartArea.x + (index / (yValues.length - 1)) * chartArea.width;
+        const y = chartArea.y + chartArea.height - ((value - minY) / range) * chartArea.height;
+        
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+        
+        // Draw point
+        ctx.fillStyle = '#36A2EB';
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+    
+    ctx.stroke();
+    
+    // Draw axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartArea.x, chartArea.y + chartArea.height);
+    ctx.lineTo(chartArea.x + chartArea.width, chartArea.y + chartArea.height);
+    ctx.moveTo(chartArea.x, chartArea.y);
+    ctx.lineTo(chartArea.x, chartArea.y + chartArea.height);
+    ctx.stroke();
+}
+
+// Helper function to get chart data from path
+function getChartDataFromPath(data, slideIndex) {
+    return data.presentation.chart_slides[slideIndex].chart_data[0];
+}
 
 // Update data at specific path
 function updateDataAtPath(obj, path, value) {
