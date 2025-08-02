@@ -39,7 +39,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY environment variable not set.")
-model_name = "gemini-2.5-flash" # Use a more recent model if possible
+model_name = "gemini-2.5-flash" 
 
 app = FastAPI(
     title="Robust AI Data Visualization Agent v3",
@@ -47,7 +47,7 @@ app = FastAPI(
 )
 
 
-# --- Pydantic Models for Structured Output ---
+# Models for Structured Output 
 
 class ChartSuggestion(BaseModel):
     title: str = Field(description="The concise, descriptive title from 'Chart Suggestion Title'.")
@@ -61,7 +61,7 @@ class Suggestions(BaseModel):
     charts: List[ChartSuggestion]
 
 
-# --- Pydantic Models for PDF Analysis Output ---
+# Models for PDF Analysis Output 
 
 class ChartAnalysis(BaseModel):
     chart_number: int = Field(description="The sequential number of the chart in the PDF.")
@@ -78,7 +78,7 @@ class PDFAnalysisReport(BaseModel):
     overall_trend_summary: str = Field(description="A single comprehensive sentence describing the overall trend across all charts in the dataset.")
 
 
-# --- HELPER FUNCTIONS ---
+# Helper Functions 
 
 def setup_unicode_fonts():
     """Finds and registers a Unicode-compatible font for PDF generation."""
@@ -151,7 +151,7 @@ def analyze_pdf_with_genai(pdf_file_path: str, google_api_key: str) -> PDFAnalys
         6. Describe the main data trends or patterns visible
         7. Note any statistical observations like outliers, distributions, correlations
 
-        At the end, provide a single comprehensive sentence describing the overall trend across all charts in the dataset.
+        At the end, provide a 3-sentence comprehensive summary describing the overall trend across all charts in the dataset.
 
         Please be thorough and specific in your analysis, mentioning actual values and patterns you can see in the charts.
         """
@@ -272,7 +272,7 @@ Your primary skill is to look at any dataset and instantly identify the most com
 You think critically about the data, considering potential relationships, distributions, comparisons, compositions, and trends over time. 
 Your suggestions must be modern, clear, and insightful, leveraging the capabilities of libraries like Seaborn.
 
-Your mission is to analyze the provided dataset context and propose diverse 3 visualizations that tell a coherent story about the data. Your suggestions must be a complete blueprint that an automated tool can use to generate the charts directly.
+Your mission is to analyze the provided dataset context and propose diverse 15 visualizations that tell a coherent story about the data. Your suggestions must be a complete blueprint that an automated tool can use to generate the charts directly.
 
 **CRITICAL: You MUST only use the exact column names that exist in the dataset. The available columns are: {df_columns}**
 
