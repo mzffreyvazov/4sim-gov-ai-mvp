@@ -27,7 +27,7 @@ class Recipe(BaseModel):
     recipe_name: str
     ingredients: list[str]
 
-client = genai.Client(api_key="AIzaSyBwm3LPW79KqUUOjzNyEZvI3CJG_D0qcX0")
+client = genai.Client(api_key="YOUR_API_KEY")
 
 prompt = "please analyze each chart in the pdf file, and write detailed descriptions of each chart, showing the trends etc. at the end write one single final sentence describing the trend"
 response = client.models.generate_content(
