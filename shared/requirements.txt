@@ -1,12 +1,17 @@
 fastapi
 uvicorn[standard]
 langchain
+langchain-google-genai  # for LangChain integration with Google Gemini
 openai
+google-genai        # for PDF analysis with Gemini
 pandas
 numpy
 matplotlib
+seaborn
+reportlab           # for PDF generation
 weasyprint
 pymupdf             # for PDF parsing
 python‑pptx
 chromadb            # or pinecone-client
 python‑dotenv
+chardet             # for encoding detection
