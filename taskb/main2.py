@@ -1,18 +1,24 @@
 import os
 import io
+import time
 import chardet
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 import pandas as pd
 import numpy as np
-
+import pathlib
+import json
 # LangChain Imports
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
+
+# Google GenAI for PDF Analysis
+from google import genai
+from google.genai import types
 
 # Matplotlib/Seaborn for Plotting
 import matplotlib
@@ -53,6 +59,23 @@ class ChartSuggestion(BaseModel):
 
 class Suggestions(BaseModel):
     charts: List[ChartSuggestion]
+
+
+# --- Pydantic Models for PDF Analysis Output ---
+
+class ChartAnalysis(BaseModel):
+    chart_number: int = Field(description="The sequential number of the chart in the PDF.")
+    chart_title: str = Field(description="The title of the chart as displayed in the PDF.")
+    chart_type: str = Field(description="The type of chart (e.g., histogram, scatter plot, box plot, etc.).")
+    detailed_description: str = Field(description="A comprehensive description of what the chart shows, including specific data points, patterns, and trends visible in the chart.")
+    key_insights: List[str] = Field(description="A list of 3-5 key insights or findings that can be derived from this chart.")
+    data_trends: str = Field(description="Description of the main trends, patterns, or relationships shown in the data.")
+    statistical_observations: str = Field(description="Any notable statistical observations like outliers, distributions, correlations, etc.")
+
+class PDFAnalysisReport(BaseModel):
+    total_charts: int = Field(description="Total number of charts analyzed in the PDF.")
+    charts: List[ChartAnalysis] = Field(description="List of detailed analysis for each chart.")
+    overall_trend_summary: str = Field(description="A single comprehensive sentence describing the overall trend across all charts in the dataset.")
 
 
 # --- HELPER FUNCTIONS ---
@@ -107,6 +130,140 @@ def clean_generated_code(code_string: str) -> str:
     return '\n'.join(lines).strip()
 
 
+def analyze_pdf_with_genai(pdf_file_path: str, google_api_key: str) -> PDFAnalysisReport:
+    """Analyzes a PDF file using Google GenAI and returns structured analysis."""
+    try:
+        
+        
+        # Initialize the Google GenAI client
+        client = genai.Client(api_key=google_api_key)
+        print("Google GenAI client initialized successfully.")
+        
+        # Define the analysis prompt
+        analysis_prompt = """
+        Please analyze each chart in this PDF file in detail. For each chart you find:
+
+        1. Identify the chart number (sequential order in the PDF)
+        2. Extract the chart title
+        3. Determine the chart type (histogram, scatter plot, box plot, etc.)
+        4. Provide a detailed description of what the chart shows, including specific data points, patterns, and trends
+        5. List 3-5 key insights or findings from the chart
+        6. Describe the main data trends or patterns visible
+        7. Note any statistical observations like outliers, distributions, correlations
+
+        At the end, provide a single comprehensive sentence describing the overall trend across all charts in the dataset.
+
+        Please be thorough and specific in your analysis, mentioning actual values and patterns you can see in the charts.
+        """
+
+        
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                    types.Part.from_bytes(
+                        data=pathlib.Path(pdf_file_path).read_bytes(),
+                        mime_type='application/pdf',
+                    ),
+                    analysis_prompt],
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": PDFAnalysisReport.model_json_schema(),
+            }
+        )
+        
+        print("Response received from Google GenAI.")
+        analysis_data = json.loads(response.text)
+        parsed_result = PDFAnalysisReport(**analysis_data)
+        print(f"Successfully parsed JSON with {len(parsed_result.charts)} charts")
+        return parsed_result
+            
+    except Exception as e:
+        print(f"Error analyzing PDF with GenAI: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a fallback analysis
+        return PDFAnalysisReport(
+            total_charts=0,
+            charts=[],
+            overall_trend_summary="Unable to analyze the PDF due to an error."
+        )
+
+
+def generate_enhanced_pdf(chart_images: List[io.BytesIO], pdf_analysis: PDFAnalysisReport, output_filename: str) -> str:
+    """Generates an enhanced PDF with detailed chart descriptions from the analysis."""
+    unicode_font = setup_unicode_fonts()
+    
+    doc = SimpleDocTemplate(output_filename, pagesize=A4)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('CustomTitle', parent=styles['h1'], fontName=unicode_font, alignment=1)
+    chart_title_style = ParagraphStyle('ChartTitle', parent=styles['h2'], fontName=unicode_font, spaceAfter=6)
+    normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontName=unicode_font, spaceAfter=12, leading=14)
+    insight_style = ParagraphStyle('InsightStyle', parent=styles['Normal'], fontName=unicode_font, spaceAfter=8, leading=12, leftIndent=20)
+    
+    story = [
+        Paragraph("AI-Generated Enhanced Data Dashboard", title_style), 
+        Spacer(1, 0.25 * inch),
+        Paragraph(f"<b>Overall Analysis Summary:</b> {pdf_analysis.overall_trend_summary}", normal_style),
+        Spacer(1, 0.3 * inch)
+    ]
+    
+    # Add each chart with its enhanced description
+    charts_to_process = min(len(chart_images), len(pdf_analysis.charts))
+    
+    for i in range(charts_to_process):
+        img_buffer = chart_images[i]
+        chart_analysis = pdf_analysis.charts[i]
+        
+        # Chart image
+        img_buffer.seek(0)
+        img = Image(img_buffer, width=6*inch, height=3.75*inch, kind='proportional')
+        
+        # Chart title
+        story.append(Paragraph(f"Chart {chart_analysis.chart_number}: {chart_analysis.chart_title}", chart_title_style))
+        story.append(img)
+        story.append(Spacer(1, 0.1 * inch))
+        
+        # Chart type
+        story.append(Paragraph(f"<b>Chart Type:</b> {chart_analysis.chart_type}", normal_style))
+        
+        # Detailed description
+        story.append(Paragraph(f"<b>Detailed Analysis:</b> {chart_analysis.detailed_description}", normal_style))
+        
+        # Data trends
+        story.append(Paragraph(f"<b>Data Trends:</b> {chart_analysis.data_trends}", normal_style))
+        
+        # Statistical observations
+        if chart_analysis.statistical_observations:
+            story.append(Paragraph(f"<b>Statistical Observations:</b> {chart_analysis.statistical_observations}", normal_style))
+        
+        # Key insights
+        story.append(Paragraph("<b>Key Insights:</b>", normal_style))
+        for insight in chart_analysis.key_insights:
+            story.append(Paragraph(f"• {insight}", insight_style))
+        
+        story.append(Spacer(1, 0.3 * inch))
+    
+    # Handle remaining chart images if analysis has fewer charts
+    for i in range(charts_to_process, len(chart_images)):
+        img_buffer = chart_images[i]
+        img_buffer.seek(0)
+        img = Image(img_buffer, width=6*inch, height=3.75*inch, kind='proportional')
+        
+        story.append(Paragraph(f"Chart {i+1}: Additional Chart", chart_title_style))
+        story.append(img)
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(Paragraph("<b>Analysis:</b> Detailed analysis not available for this chart.", normal_style))
+        story.append(Spacer(1, 0.3 * inch))
+    
+    # Add final summary
+    story.append(Spacer(1, 0.25 * inch))
+    story.append(Paragraph("<b>Final Summary:</b>", chart_title_style))
+    story.append(Paragraph(pdf_analysis.overall_trend_summary, normal_style))
+    
+    doc.build(story)
+    return output_filename
+
+
 # --- PROMPT TEMPLATES ---
 
 analysis_template = """
@@ -115,7 +272,7 @@ Your primary skill is to look at any dataset and instantly identify the most com
 You think critically about the data, considering potential relationships, distributions, comparisons, compositions, and trends over time. 
 Your suggestions must be modern, clear, and insightful, leveraging the capabilities of libraries like Seaborn.
 
-Your mission is to analyze the provided dataset context and propose diverse 15 visualizations that tell a coherent story about the data. Your suggestions must be a complete blueprint that an automated tool can use to generate the charts directly.
+Your mission is to analyze the provided dataset context and propose diverse 3 visualizations that tell a coherent story about the data. Your suggestions must be a complete blueprint that an automated tool can use to generate the charts directly.
 
 **CRITICAL: You MUST only use the exact column names that exist in the dataset. The available columns are: {df_columns}**
 
@@ -378,17 +535,18 @@ Text Report to Parse:
     if not chart_images:
         raise HTTPException(status_code=500, detail="No charts could be generated successfully. Check server logs for details.")
 
-    # --- Final Step: Assemble the PDF report ---
-    output_filename = f"{file.filename.split('.')[0]}_dashboard.pdf"
+    # --- Step 4: Generate initial PDF for analysis ---
+    initial_pdf_filename = f"{file.filename.split('.')[0]}_initial_dashboard.pdf"
     unicode_font = setup_unicode_fonts()
     
-    doc = SimpleDocTemplate(output_filename, pagesize=A4)
+    doc = SimpleDocTemplate(initial_pdf_filename, pagesize=A4)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('CustomTitle', parent=styles['h1'], fontName=unicode_font, alignment=1)
     normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'], fontName=unicode_font, spaceAfter=12, leading=14)
     
     story = [Paragraph("AI-Generated Data Dashboard", title_style), Spacer(1, 0.25 * inch)]
     for img_buffer, text in zip(chart_images, annotations):
+        img_buffer.seek(0)  # Reset buffer position
         img = Image(img_buffer, width=6*inch, height=3.75*inch, kind='proportional')
         story.append(img)
         story.append(Spacer(1, 0.1 * inch))
@@ -396,4 +554,36 @@ Text Report to Parse:
         story.append(Spacer(1, 0.25 * inch))
 
     doc.build(story)
-    return FileResponse(output_filename, media_type="application/pdf", filename=output_filename)
+    print(f"Initial PDF generated: {initial_pdf_filename}")
+
+    # --- Step 5: Analyze the generated PDF with Google GenAI ---
+    print("Step 5: Analyzing the generated PDF with Google GenAI...")
+    try:
+        pdf_analysis = analyze_pdf_with_genai(initial_pdf_filename, GOOGLE_API_KEY)
+        print(f"PDF analysis completed. Found {pdf_analysis.total_charts} charts.")
+        
+        # --- Step 6: Generate enhanced PDF with detailed descriptions ---
+        print("Step 6: Generating enhanced PDF with detailed descriptions...")
+        timestamp = int(time.time())
+        enhanced_pdf_filename = f"{file.filename.split('.')[0]}_enhanced_dashboard_{timestamp}.pdf"
+
+        # Reset buffer positions for chart images
+        for img_buffer in chart_images:
+            img_buffer.seek(0)
+        
+        generate_enhanced_pdf(chart_images, pdf_analysis, enhanced_pdf_filename)
+        print(f"Enhanced PDF generated: {enhanced_pdf_filename}")
+        
+        # Clean up the initial PDF
+        try:
+            os.remove(initial_pdf_filename)
+            print("Initial PDF cleaned up.")
+        except:
+            pass
+        
+        return FileResponse(enhanced_pdf_filename, media_type="application/pdf", filename=enhanced_pdf_filename)
+        
+    except Exception as e:
+        print(f"Error during PDF analysis: {e}")
+        print("Falling back to the initial PDF...")
+        return FileResponse(initial_pdf_filename, media_type="application/pdf", filename=initial_pdf_filename)
