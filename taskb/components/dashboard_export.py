@@ -9,7 +9,7 @@ def dashboard_export_component(
     chart_images: List[Tuple[io.BytesIO, str]],
     api_key: str = ""
 ) -> None:
-    """Dashboard export with multiple format options"""
+    """Dashboard export with multiple format options and performance optimizations"""
     
     st.subheader("📄 Export & Download Dashboard")
     
@@ -19,31 +19,46 @@ def dashboard_export_component(
     
     st.markdown(f"📊 **{len(chart_images)} charts ready for export**")
     
-    # Export options
-    col1, col2 = st.columns(2)
+    # Initialize session state for export settings
+    if 'export_format_index' not in st.session_state:
+        st.session_state.export_format_index = 0
+    if 'include_metadata' not in st.session_state:
+        st.session_state.include_metadata = True
     
-    with col1:
+    # Use form to prevent reruns when changing export settings
+    with st.form("export_settings_form"):
+        st.markdown("**Configure your export settings:**")
+        
+        # Move export format to the top as requested
         export_format = st.selectbox(
             "📋 Export Format",
             ["Individual Images (ZIP)", "Simple PDF", "Enhanced PDF (with AI Analysis)"],
+            index=st.session_state.export_format_index,
             help="Choose how you want to export your dashboard"
         )
-    
-    with col2:
+        
         include_metadata = st.checkbox(
             "📝 Include Metadata",
-            value=True,
+            value=st.session_state.include_metadata,
             help="Include chart titles and descriptions"
         )
+        
+        # Export button
+        export_btn = st.form_submit_button(
+            "🚀 Export Dashboard",
+            type="primary",
+            help="Generate and download your dashboard"
+        )
     
-    # Export button
-    export_btn = st.button(
-        "🚀 Export Dashboard",
-        type="primary",
-        help="Generate and download your dashboard"
-    )
+    # Display current settings
+    st.info(f"📋 **Current:** {['ZIP', 'Simple PDF', 'Enhanced PDF'][st.session_state.export_format_index]} format, Metadata: {'✅' if st.session_state.include_metadata else '❌'}")
     
+    # Only export when form is submitted
     if export_btn:
+        # Update session state with current settings
+        st.session_state.export_format_index = ["Individual Images (ZIP)", "Simple PDF", "Enhanced PDF (with AI Analysis)"].index(export_format)
+        st.session_state.include_metadata = include_metadata
+        
         export_dashboard(chart_images, export_format, include_metadata, api_key)
 
 def export_dashboard(
@@ -264,25 +279,17 @@ def export_enhanced_pdf(
             st.exception(e)
 
 def display_export_status(chart_count: int):
-    """Display export status and options"""
+    """Display export status - cleaned up version without quick export buttons"""
     
     if chart_count == 0:
         st.info("📊 Generate some charts first to enable export options.")
     else:
         st.success(f"✅ {chart_count} charts ready for export!")
         
-        # Quick export buttons
-        col1, col2, col3 = st.columns(3)
+        # Only keep the reset charts option
+        col1, col2, col3 = st.columns([1, 1, 1])
         
-        with col1:
-            if st.button("🖼️ Quick ZIP Export", help="Download all charts as images"):
-                st.info("Use the export section above for full options.")
-        
-        with col2:
-            if st.button("📄 Quick PDF Export", help="Download charts as PDF"):
-                st.info("Use the export section above for full options.")
-                
-        with col3:
+        with col2:  # Center the reset button
             if st.button("🔄 Reset Charts", help="Clear all generated charts"):
                 if 'generated_charts' in st.session_state:
                     st.session_state.generated_charts = []

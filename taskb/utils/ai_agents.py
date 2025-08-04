@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from .models import ChartSuggestion, Suggestions, PDFAnalysisReport
-from .prompts import ANALYSIS_TEMPLATE, CODE_GEN_TEMPLATE, EXTRACTION_TEMPLATE
+from .prompts import ANALYSIS_TEMPLATE, CODE_GEN_TEMPLATE, EXTRACTION_TEMPLATE, QUERY_PROCESSING_TEMPLATE
 
 class DataAnalyst:
     """Analyzes datasets and generates chart suggestions"""
@@ -66,6 +66,35 @@ class SuggestionExtractor:
                 print(f"Warning: Unexpected chart data format: {type(chart_data)}")
                 
         return suggestions
+
+class ChartQueryProcessor:
+    """Processes natural language chart queries and converts them to ChartSuggestion format"""
+    
+    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash"):
+        self.llm = ChatGoogleGenerativeAI(
+            model=model_name, 
+            temperature=0.0, 
+            api_key=api_key
+        )
+    
+    def process_query(self, user_query: str, df_context: Dict[str, str]) -> ChartSuggestion:
+        """Convert natural language query to structured chart suggestion"""
+        query_prompt = PromptTemplate.from_template(QUERY_PROCESSING_TEMPLATE)
+        json_parser = JsonOutputParser(pydantic_object=ChartSuggestion)
+        query_chain = query_prompt | self.llm | json_parser
+        
+        result = query_chain.invoke({
+            "user_query": user_query,
+            "df_columns": df_context["df_columns"],
+            "df_info": df_context["df_info"],
+            "df_description": df_context["df_description"],
+            "format_instructions": json_parser.get_format_instructions()
+        })
+        
+        # Convert to ChartSuggestion object if it's a dict
+        if isinstance(result, dict):
+            return ChartSuggestion(**result)
+        return result
 
 class ChartCodeGenerator:
     """Generates executable Python code for charts"""

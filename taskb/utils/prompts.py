@@ -113,3 +113,53 @@ Your task is to analyze the text report below and extract exactly {num_suggestio
 
 Extract the suggestions now and return them in the specified JSON format.
 """
+
+QUERY_PROCESSING_TEMPLATE = """
+You are an expert data analyst specialized in converting natural language queries into structured chart suggestions.
+
+Your task is to analyze the user's natural language query and convert it into a structured chart suggestion that can be used to generate a visualization.
+
+**USER QUERY:** {user_query}
+
+**DATASET CONTEXT:**
+- **Available Columns:** {df_columns}
+- **Data Types & Info:** {df_info}
+- **Statistical Summary:** {df_description}
+
+**YOUR TASK:**
+Convert the user's query into a structured chart suggestion following this exact schema:
+
+{format_instructions}
+
+**CRITICAL RULES:**
+1. **ONLY use column names that exist in the dataset:** {df_columns}
+2. **Choose the most appropriate chart type** based on the query and data types
+3. **Create a clear, descriptive title** that reflects what the chart will show
+4. **Formulate a specific analytical question** that the chart will answer
+5. **Map columns appropriately** to X-Axis, Y-Axis, Color/Hue, and Facet fields
+6. **Set unused mapping fields to null**
+7. **Specify pre-processing steps** if data manipulation is needed, otherwise use "None"
+8. **Provide insightful description** explaining why this visualization is valuable
+
+**COMMON CHART TYPES TO CHOOSE FROM:**
+- Histogram: For single variable distributions
+- Box Plot: For comparing distributions across categories
+- Violin Plot: For detailed distribution comparisons
+- Scatter Plot: For relationships between two continuous variables
+- Bar Plot: For categorical comparisons
+- Line Plot: For trends over time or ordered categories
+- Heatmap: For correlation matrices or pivot tables
+- Count Plot: For frequency of categorical variables
+
+**EXAMPLE COLUMN MAPPING FORMAT:**
+```json
+{{
+  "X-Axis": "column_name_1",
+  "Y-Axis": "column_name_2", 
+  "Color/Hue (Optional)": "categorical_column",
+  "Facet (Optional)": null
+}}
+```
+
+Analyze the query and provide the structured chart suggestion now.
+"""
