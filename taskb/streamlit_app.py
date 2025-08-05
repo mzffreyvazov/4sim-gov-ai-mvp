@@ -124,6 +124,9 @@ def initialize_session_state():
         'df_context': {},
         'qa_generated_chart': None,
         'qa_suggestion': None,
+        'raw_csv_data': None,
+        'original_filename': None,
+        'gemini_api_key': '',
     }
     
     for var, default_value in session_vars.items():
@@ -160,7 +163,7 @@ def configure_sidebar():
         # Only update when form is submitted
         if api_submit and api_key:
             os.environ["GOOGLE_API_KEY"] = api_key
-            st.session_state.google_api_key = api_key
+            st.session_state.gemini_api_key = api_key  # Updated to match session state
             st.session_state.model_name = model_name
             st.session_state.debug_mode = debug_mode
             st.success("✅ Settings updated")
@@ -170,11 +173,13 @@ def configure_sidebar():
         # Display current settings
         st.markdown("---")
         st.markdown("**Current Settings:**")
-        if st.session_state.get('google_api_key'):
+        if st.session_state.get('gemini_api_key'):  # Updated to match session state
             st.markdown("- API: ✅ Configured")
             st.markdown(f"- Model: {st.session_state.get('model_name', 'gemini-2.5-flash')}")
         else:
             st.markdown("- API: ❌ Not configured")
+        
+        return st.session_state.get('gemini_api_key', ''), st.session_state.get('model_name', 'gemini-2.5-flash')
         
         if st.session_state.get('debug_mode'):
             st.markdown("- Debug: 🐛 Enabled")
@@ -238,7 +243,7 @@ def main():
             st.warning("⚠️ Please configure your Google API key in the sidebar first.")
 
 def handle_data_upload():
-    """Handle file upload and data preview"""
+    """Handle file upload and data preview with optional AI formatting"""
     
     # File upload
     uploaded_file = enhanced_file_uploader()
@@ -248,14 +253,45 @@ def handle_data_upload():
             # Process the uploaded file
             with st.spinner("🔄 Processing your file..."):
                 file_content = uploaded_file.read()
+                
+                # First, try to load the file normally
                 df = DataProcessor.read_uploaded_file(file_content, uploaded_file.name)
                 
-                # Store in session state
+                # Get raw CSV data for potential formatting
+                raw_csv_data = DataProcessor.extract_raw_csv_data(file_content, uploaded_file.name)
+                
+                # Store initial data in session state
                 st.session_state.df = df
                 st.session_state.df_context = DataProcessor.get_dataframe_context(df)
+                st.session_state.raw_csv_data = raw_csv_data
+                st.session_state.original_filename = uploaded_file.name
                 
-            # Display preview
+            # Display initial preview
             display_dataframe_preview(df)
+            
+            # CSV Formatting Component
+            st.markdown("---")
+            from components.file_upload import csv_formatting_component
+            
+            # Get API key from session state or sidebar
+            api_key = st.session_state.get('gemini_api_key', '')
+            
+            formatted_df, was_formatted = csv_formatting_component(
+                df=df,
+                raw_csv_data=raw_csv_data,
+                api_key=api_key,
+                filename=uploaded_file.name
+            )
+            
+            # Update session state if data was formatted
+            if was_formatted and formatted_df is not None:
+                st.session_state.df = formatted_df
+                st.session_state.df_context = DataProcessor.get_dataframe_context(formatted_df)
+                
+                # Show updated preview
+                st.markdown("---")
+                st.subheader("📊 Updated Dataset Preview")
+                display_dataframe_preview(formatted_df)
             
             # Next steps hint
             st.info("✨ **Next Step:** Go to the 'AI Analysis' tab to generate chart suggestions!")

@@ -7,7 +7,8 @@ This is a comprehensive Streamlit implementation of the AI-powered dashboard gen
 ## Features
 
 - 🤖 **AI-Powered Analysis**: Automatic data analysis using Google Gemini
-- 📊 **Smart Chart Suggestions**: Generate 5 intelligent chart suggestions
+- � **Smart CSV Formatting**: AI-powered cleaning of complex/unstructured CSV files
+- �📊 **Smart Chart Suggestions**: Generate 5 intelligent chart suggestions
 - 🎨 **Interactive Preview**: Real-time chart generation and editing
 - 📄 **Multiple Export Formats**: PDF, ZIP, individual images
 - 🔧 **Configurable Settings**: Customizable AI parameters
@@ -63,6 +64,10 @@ The application will be available at `http://localhost:8501`
 1. Go to the "📁 Upload Data" tab
 2. Upload your CSV or Excel file (max 200MB)
 3. Preview your data in the interactive tables
+4. **NEW**: Use AI-powered CSV formatting for complex files (e.g., from stat.gov.az)
+   - System automatically detects if formatting is recommended
+   - Preview changes before applying
+   - Handles multi-level headers and unstructured data
 
 ### Step 2: AI Analysis
 1. Navigate to "🔍 AI Analysis" tab
@@ -99,7 +104,7 @@ taskb/
 │   ├── models.py             # Pydantic models
 │   └── prompts.py            # AI prompt templates
 ├── components/
-│   ├── file_upload.py        # File upload widget
+│   ├── file_upload.py        # File upload widget + CSV formatting
 │   ├── chart_preview.py      # Chart preview component
 │   └── dashboard_export.py   # Export functionality
 └── .streamlit/
@@ -112,6 +117,8 @@ taskb/
 - **DataAnalyst**: Analyzes datasets and generates chart suggestions
 - **SuggestionExtractor**: Converts text analysis to structured data
 - **ChartCodeGenerator**: Creates executable Python visualization code
+- **CSVFormatter**: AI-powered cleaning and structuring of complex CSV files
+- **ChartQueryProcessor**: Handles natural language chart queries
 
 ### Data Processing
 - **DataProcessor**: Handles file uploads and DataFrame operations

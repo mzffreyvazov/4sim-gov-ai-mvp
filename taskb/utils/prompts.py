@@ -163,3 +163,100 @@ Convert the user's query into a structured chart suggestion following this exact
 
 Analyze the query and provide the structured chart suggestion now.
 """
+
+CSV_FORMATTING_TEMPLATE = """
+You are an expert data processing specialist with deep knowledge of CSV file structures, particularly those from government statistical agencies and similar sources. Your task is to analyze and reformat unstructured CSV data into a clean, standardized format suitable for data analysis.
+
+**YOUR MISSION:**
+Transform the provided raw CSV data into a properly structured format by:
+1. Identifying and flattening multi-level headers
+2. Cleaning and standardizing column names
+3. Extracting and organizing data rows
+4. Handling missing values appropriately
+5. Ensuring the output is analysis-ready
+
+**DETAILED PROCESSING RULES:**
+
+**1. HEADER ANALYSIS & FLATTENING:**
+- Identify header rows at the top of the data (usually 1-3 rows)
+- For multi-level headers: concatenate header levels using underscore (_) separator
+- Example: "Population" + "Male" + "2023" becomes "Population_Male_2023"
+- Trim all whitespace from header components
+- Ensure each column has a unique, descriptive name
+- If headers are unclear, create meaningful names based on data content
+
+**2. COLUMN NAME STANDARDIZATION:**
+- Remove special characters except underscores
+- Convert to snake_case format (lowercase with underscores)
+- Make names descriptive and analysis-friendly
+- Remove line breaks and hyphens within words
+- Combine hyphenated words into single words (e.g., "heyvan-darlıq" → "heyvandarliq")
+- Use meaningful English translations or transliterations when possible
+- Examples:
+  - "GDP (millions USD)" → "gdp_millions_usd"
+  - "Population - Total" → "population_total"
+  - "2023 Q1" → "q1_2023"
+  - "heyvan-darlıq" → "heyvandarliq"
+  - "bitki-çilik" → "bitkicilik"
+- First column should typically be named based on its content (e.g., "region", "category", "year", "identifier")
+
+**3. DATA ROW PROCESSING:**
+- Identify where actual data begins (after header rows)
+- Extract all data rows maintaining original values
+- Preserve numerical precision exactly as provided
+- Keep text identifiers verbatim
+
+**4. MISSING VALUE HANDLING:**
+- Empty cells: leave blank in CSV
+- Dash (-), ellipsis (...), "n/a", "N/A": convert to empty cells
+- Other placeholder values: convert to empty cells if they clearly indicate missing data
+- Preserve zeros (0) as actual values, not missing data
+
+**5. OUTPUT REQUIREMENTS:**
+- Return ONLY the clean CSV data
+- First row must contain the final column headers
+- Subsequent rows contain the data
+- Use comma separators
+- Ensure proper CSV escaping for text containing commas
+- No explanations, no markdown formatting, no additional text
+- Must be syntactically valid CSV that can be directly parsed
+
+**6. DATA QUALITY ASSURANCE:**
+- Verify all rows have the same number of columns
+- Ensure numerical data maintains proper formatting
+- Check that identifiers are preserved exactly
+- Confirm headers are unique and descriptive
+
+**EXAMPLE TRANSFORMATION:**
+
+Input (messy multi-header CSV):
+```
+,Economic Indicators,Economic Indicators,Population Data,Population Data
+,GDP,Inflation,Total,Growth Rate
+Region,2023,2023,2023,2023
+Baku,45.2,8.5,2.3M,1.2%
+Ganja,12.1,7.8,0.5M,0.8%
+```
+
+Output (clean CSV):
+```
+region,gdp_2023,inflation_2023,population_total_2023,population_growth_rate_2023
+Baku,45.2,8.5,2.3M,1.2%
+Ganja,12.1,7.8,0.5M,0.8%
+```
+
+**AZERBAIJANI TEXT HANDLING:**
+For Azerbaijani text, clean and standardize as follows:
+- "heyvan-darlıq" → "heyvandarliq" (remove hyphens, combine words)
+- "bitki-çilik" → "bitkicilik" (remove hyphens, combine words)
+- "Cəmi" → "cemi" or "total" (transliterate or translate)
+- Keep regional names as-is but clean formatting
+- Remove line breaks within words
+- Convert to lowercase and snake_case format
+
+**RAW CSV DATA TO PROCESS:**
+{raw_csv_data}
+
+**INSTRUCTIONS:**
+Analyze the above raw CSV data and return the cleaned, formatted version following all the rules specified. Return ONLY the formatted CSV data - no explanations or additional text.
+"""

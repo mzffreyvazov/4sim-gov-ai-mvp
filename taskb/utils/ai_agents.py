@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from .models import ChartSuggestion, Suggestions, PDFAnalysisReport
-from .prompts import ANALYSIS_TEMPLATE, CODE_GEN_TEMPLATE, EXTRACTION_TEMPLATE, QUERY_PROCESSING_TEMPLATE
+from .prompts import ANALYSIS_TEMPLATE, CODE_GEN_TEMPLATE, EXTRACTION_TEMPLATE, QUERY_PROCESSING_TEMPLATE, CSV_FORMATTING_TEMPLATE
 
 class DataAnalyst:
     """Analyzes datasets and generates chart suggestions"""
@@ -132,3 +132,62 @@ class ChartCodeGenerator:
         lines = [line for line in code_string.split('\n') 
                 if not (line.strip().startswith('import ') or line.strip().startswith('from '))]
         return '\n'.join(lines).strip()
+
+class CSVFormatter:
+    """Formats and cleans unstructured CSV data from government sources and similar complex datasets"""
+    
+    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash"):
+        self.llm = ChatGoogleGenerativeAI(
+            model=model_name, 
+            temperature=0.0, 
+            api_key=api_key
+        )
+        
+    def format_csv_data(self, raw_csv_data: str) -> str:
+        """
+        Process raw CSV data and return formatted, analysis-ready CSV
+        
+        Args:
+            raw_csv_data: Raw CSV content as string
+            
+        Returns:
+            Formatted CSV data as string
+        """
+        formatting_prompt = PromptTemplate.from_template(CSV_FORMATTING_TEMPLATE)
+        formatting_chain = formatting_prompt | self.llm | StrOutputParser()
+        
+        formatted_csv = formatting_chain.invoke({
+            "raw_csv_data": raw_csv_data
+        })
+        
+        return self._clean_csv_output(formatted_csv)
+    
+    def _clean_csv_output(self, csv_output: str) -> str:
+        """Clean the LLM output to ensure it's valid CSV"""
+        # Remove any markdown formatting
+        if "```csv" in csv_output:
+            csv_output = csv_output.split("```csv")[1].strip()
+        if "```" in csv_output:
+            csv_output = csv_output.split("```")[0].strip()
+        
+        # Remove any explanatory text that might be before or after CSV
+        lines = csv_output.strip().split('\n')
+        
+        # Find the start of actual CSV data (first line with commas)
+        start_idx = 0
+        for i, line in enumerate(lines):
+            if ',' in line and not line.strip().startswith('#'):
+                start_idx = i
+                break
+        
+        # Find the end of CSV data (last line with commas)
+        end_idx = len(lines) - 1
+        for i in range(len(lines) - 1, -1, -1):
+            if ',' in lines[i] and not lines[i].strip().startswith('#'):
+                end_idx = i
+                break
+        
+        # Extract only the CSV portion
+        csv_lines = lines[start_idx:end_idx + 1]
+        
+        return '\n'.join(csv_lines).strip()
