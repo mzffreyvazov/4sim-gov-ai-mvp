@@ -165,30 +165,63 @@ Analyze the query and provide the structured chart suggestion now.
 """
 
 CSV_FORMATTING_TEMPLATE = """
-You are an expert data processing specialist with deep knowledge of CSV file structures, particularly those from government statistical agencies and similar sources. Your task is to analyze and reformat unstructured CSV data into a clean, standardized format suitable for data analysis.
+You are an expert data processing specialist with deep knowledge of CSV file structures, particularly those from government statistical agencies and similar sources. Your task is to analyze and reformat unstructured CSV data that may contain ONE OR MULTIPLE data tables.
 
 **YOUR MISSION:**
-Transform the provided raw CSV data into a properly structured format by:
-1. Identifying and flattening multi-level headers
-2. Cleaning and standardizing column names
-3. Extracting and organizing data rows
-4. Handling missing values appropriately
-5. Ensuring the output is analysis-ready
+Analyze the raw CSV data to detect if it contains single or multiple tables, then format accordingly.
+
+**MULTI-TABLE DETECTION RULES:**
+1. Look for clear descriptive title rows that indicate DISTINCT datasets (e.g., "18.1 Ümumi istifadədə olan sabit şəbəkə telefonlarının sayı")
+2. Identify major sections separated by 3+ empty rows or clear topic changes
+3. Each table should have:
+   - A descriptive title or heading
+   - Its own complete header row structure
+   - Multiple rows of actual data (minimum 2-3 data rows)
+   - Consistent data structure within the table
+4. **AVOID OVER-SPLITTING**: Do not create separate tables for:
+   - Different time periods in the same dataset (combine into one table with time columns)
+   - Sub-categories or breakdowns of the same metric
+   - Related data that logically belongs together
+5. **MINIMUM TABLE SIZE**: Each table should have at least 3 rows of actual data
+6. **MAXIMUM TABLES**: Limit to maximum 3-4 tables unless clearly distinct datasets exist
+
+**OUTPUT FORMAT:**
+
+**IF SINGLE TABLE DETECTED:**
+Return the formatted CSV as normal with clean headers and data.
+
+**IF MULTIPLE TABLES DETECTED:**
+Return in this exact format:
+```
+TABLE_1_TITLE: [descriptive title extracted from the data]
+[formatted csv data for table 1]
+
+TABLE_2_TITLE: [descriptive title extracted from the data]
+[formatted csv data for table 2]
+
+TABLE_3_TITLE: [descriptive title extracted from the data]
+[formatted csv data for table 3]
+
+[... continue for all detected tables]
+```
 
 **DETAILED PROCESSING RULES:**
 
-**1. HEADER ANALYSIS & FLATTENING:**
-- Identify header rows at the top of the data (usually 1-3 rows)
-- For multi-level headers: concatenate header levels using underscore (_) separator
-- Example: "Population" + "Male" + "2023" becomes "Population_Male_2023"
+**1. TITLE EXTRACTION:**
+- Extract meaningful titles from descriptive rows
+- Clean and standardize titles (remove special formatting)
+- Make titles concise but descriptive
+- Example: "18.1 Ümumi istifadədə olan sabit şəbəkə telefonlarının sayı, min nömrə" → "Fixed Network Telephones Count (thousands)"
+
+**2. HEADER ANALYSIS & FLATTENING:**
+- Identify header rows for each table (usually after title and empty rows)
+- For multi-level headers: concatenate using underscore (_) separator
 - Trim all whitespace from header components
 - Ensure each column has a unique, descriptive name
-- If headers are unclear, create meaningful names based on data content
 
-**2. COLUMN NAME STANDARDIZATION:**
+**3. COLUMN NAME STANDARDIZATION:**
 - Remove special characters except underscores
 - Convert to snake_case format (lowercase with underscores)
-- Make names descriptive and analysis-friendly
 - Remove line breaks and hyphens within words
 - Combine hyphenated words into single words (e.g., "heyvan-darlıq" → "heyvandarliq")
 - Use meaningful English translations or transliterations when possible
@@ -198,65 +231,123 @@ Transform the provided raw CSV data into a properly structured format by:
   - "2023 Q1" → "q1_2023"
   - "heyvan-darlıq" → "heyvandarliq"
   - "bitki-çilik" → "bitkicilik"
-- First column should typically be named based on its content (e.g., "region", "category", "year", "identifier")
+- First column should typically be named based on its content (e.g., "country", "region", "category")
 
-**3. DATA ROW PROCESSING:**
-- Identify where actual data begins (after header rows)
+**4. DATA ROW PROCESSING:**
+- For each table, identify where actual data begins (after title and header rows)
 - Extract all data rows maintaining original values
+- **CRITICAL: Ensure ALL rows have the SAME number of fields as the header**
+- If a data row has fewer fields than the header, pad with empty cells
+- If a data row has more fields than the header, truncate to match header length
 - Preserve numerical precision exactly as provided
 - Keep text identifiers verbatim
+- Remove any extra commas that create empty trailing fields
 
-**4. MISSING VALUE HANDLING:**
+**5. FIELD COUNT CONSISTENCY:**
+- Count the number of columns in your header row
+- Ensure EVERY subsequent data row has exactly the same number of comma-separated fields
+- Example: If header has 5 columns, every data row must have exactly 4 commas (creating 5 fields)
+- Remove trailing commas that create empty fields beyond the header count
+- Pad short rows with empty cells to match header length
+
+**5. MISSING VALUE HANDLING:**
 - Empty cells: leave blank in CSV
 - Dash (-), ellipsis (...), "n/a", "N/A": convert to empty cells
 - Other placeholder values: convert to empty cells if they clearly indicate missing data
 - Preserve zeros (0) as actual values, not missing data
 
-**5. OUTPUT REQUIREMENTS:**
-- Return ONLY the clean CSV data
-- First row must contain the final column headers
-- Subsequent rows contain the data
+**6. FIELD COUNT VALIDATION:**
+- After processing each table, verify that every row has the same number of fields
+- Count commas in each row - should be (number_of_columns - 1)
+- Fix any rows with inconsistent field counts before outputting
+
+**7. OUTPUT REQUIREMENTS:**
+- For each table: first row contains clean column headers, subsequent rows contain data
 - Use comma separators
 - Ensure proper CSV escaping for text containing commas
-- No explanations, no markdown formatting, no additional text
+- No explanations, no markdown formatting around CSV data itself
 - Must be syntactically valid CSV that can be directly parsed
-
-**6. DATA QUALITY ASSURANCE:**
-- Verify all rows have the same number of columns
-- Ensure numerical data maintains proper formatting
-- Check that identifiers are preserved exactly
-- Confirm headers are unique and descriptive
-
-**EXAMPLE TRANSFORMATION:**
-
-Input (messy multi-header CSV):
-```
-,Economic Indicators,Economic Indicators,Population Data,Population Data
-,GDP,Inflation,Total,Growth Rate
-Region,2023,2023,2023,2023
-Baku,45.2,8.5,2.3M,1.2%
-Ganja,12.1,7.8,0.5M,0.8%
-```
-
-Output (clean CSV):
-```
-region,gdp_2023,inflation_2023,population_total_2023,population_growth_rate_2023
-Baku,45.2,8.5,2.3M,1.2%
-Ganja,12.1,7.8,0.5M,0.8%
-```
 
 **AZERBAIJANI TEXT HANDLING:**
 For Azerbaijani text, clean and standardize as follows:
 - "heyvan-darlıq" → "heyvandarliq" (remove hyphens, combine words)
 - "bitki-çilik" → "bitkicilik" (remove hyphens, combine words)
-- "Cəmi" → "cemi" or "total" (transliterate or translate)
-- Keep regional names as-is but clean formatting
+- "Cəmi" → "total" (translate common terms)
+- "nisbətən" → "compared_to" (translate when meaningful)
+- Keep regional/country names as-is but clean formatting
 - Remove line breaks within words
 - Convert to lowercase and snake_case format
+
+**EXAMPLE MULTI-TABLE TRANSFORMATION:**
+
+Input:
+```
+,"Overall Statistics Report"
+,
+,"Table 1: Population Data"
+,
+,Country,2020,2021,2022
+,Azerbaijan,10.1,10.2,10.3
+,
+,"Table 2: GDP Growth %"
+,
+,Country,2020,2021,2022
+,Azerbaijan,5.1,5.2,5.3
+```
+
+Output:
+```
+TABLE_1_TITLE: Population Data
+country,population_2020,population_2021,population_2022
+Azerbaijan,10.1,10.2,10.3
+
+TABLE_2_TITLE: GDP Growth Percentage
+country,gdp_growth_2020,gdp_growth_2021,gdp_growth_2022
+Azerbaijan,5.1,5.2,5.3
+```
 
 **RAW CSV DATA TO PROCESS:**
 {raw_csv_data}
 
+**CRITICAL ANTI-HALLUCINATION RULES:**
+
+1. **ONLY USE DATA FROM THE INPUT**: You must ONLY process and reformat data that actually exists in the raw CSV input. Never invent, generate, or create new data.
+
+2. **NO CODE GENERATION**: Do not include Python code, regex patterns, processing instructions, or any programming-related content in the output tables.
+
+3. **DATA VALIDATION**: Before outputting each table, verify:
+   - All data values existed in the original input
+   - All row identifiers (countries, regions, etc.) are from the original data
+   - All numerical values are from the original data
+   - No programming syntax or processing instructions are included
+
+4. **STRICT CONTENT FILTERING**: Never output:
+   - Python code snippets (e.g., "text.strip()", "re.sub()")
+   - Processing instructions (e.g., "Remove numerical prefixes")
+   - Regex patterns (e.g., r"\\s{{7}}|\\")
+   - Function calls or variable assignments
+   - Comments or processing notes
+
+5. **ACTUAL DATA ONLY**: Each table should contain only:
+   - Real country/region names from the input
+   - Real numerical values from the input
+   - Real categorical data from the input
+   - Clean, descriptive column headers derived from the input
+
 **INSTRUCTIONS:**
-Analyze the above raw CSV data and return the cleaned, formatted version following all the rules specified. Return ONLY the formatted CSV data - no explanations or additional text.
+Analyze the above raw CSV data carefully. Extract ONLY the actual data that exists in the input. 
+
+**IMPORTANT DECISION RULES:**
+1. **PREFER SINGLE TABLE**: If the data represents ONE logical dataset with multiple sections, combine into a single table with descriptive columns
+2. **ONLY CREATE MULTIPLE TABLES** when there are truly distinct, unrelated datasets that cannot be meaningfully combined
+3. **EXAMPLES OF SINGLE TABLE**: 
+   - Population data for different years and regions
+   - Economic indicators across multiple time periods
+   - Statistics broken down by categories but measuring the same phenomenon
+4. **EXAMPLES OF MULTIPLE TABLES**:
+   - Population data vs. GDP data (different metrics entirely)
+   - Historical data vs. Forecast data (different data types)
+   - Survey responses vs. Demographics (different sources)
+
+Detect if it contains single or multiple tables based on these rules. Format accordingly and return the result following the exact format specified above.
 """

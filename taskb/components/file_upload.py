@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 def enhanced_file_uploader() -> Optional[st.runtime.uploaded_file_manager.UploadedFile]:
     """Enhanced file uploader with validation and preview"""
@@ -185,7 +185,7 @@ def csv_formatting_component(df: pd.DataFrame, raw_csv_data: str, api_key: str, 
     return df, False
 
 def _perform_csv_formatting_with_auto_save(raw_csv_data: str, api_key: str, filename: str) -> Tuple[Optional[pd.DataFrame], bool]:
-    """Perform CSV formatting with automatic preview and save"""
+    """Perform CSV formatting with automatic preview and save - handles single or multiple tables"""
     try:
         # Import here to avoid circular imports
         import sys
@@ -200,59 +200,190 @@ def _perform_csv_formatting_with_auto_save(raw_csv_data: str, api_key: str, file
             # Initialize CSV formatter
             formatter = CSVFormatter(api_key=api_key)
             
-            # Format the CSV data
-            formatted_csv = formatter.format_csv_data(raw_csv_data)
+            # Format the CSV data (returns Dict[str, str])
+            tables_dict = formatter.format_csv_data(raw_csv_data)
             
-            if not formatted_csv.strip():
+            if not tables_dict:
                 st.error("❌ AI formatting failed - no valid data returned.")
                 return None, False
             
-            # Parse the formatted CSV
-            formatted_df = DataProcessor.parse_formatted_csv_string(formatted_csv)
+            # Parse CSV strings into DataFrames
+            dataframes_dict = DataProcessor.parse_multiple_formatted_csv_strings(tables_dict)
             
-            # Show success message
-            st.success("✅ **Data Successfully Formatted and Processed!**")
+            if not dataframes_dict:
+                st.error("❌ Could not parse any valid tables from formatted data.")
+                return None, False
             
-            # Show automatic preview
-            with st.expander("📊 Formatted Data Preview", expanded=True):
-                # Comparison metrics
-                col1, col2, col3 = st.columns(3)
+            # Check if single or multiple tables
+            if len(dataframes_dict) == 1:
+                # Single table - show preview and return
+                table_name, df = next(iter(dataframes_dict.items()))
+                st.success("✅ **Data Successfully Formatted and Processed!**")
                 
-                with col1:
-                    # Try to get original row count for comparison
-                    try:
-                        import io
-                        original_df = pd.read_csv(io.StringIO(raw_csv_data))
-                        original_rows = len(original_df)
-                    except:
-                        original_rows = "N/A"
-                    
-                    st.metric("Rows", f"{len(formatted_df)}", 
-                             delta=f"vs {original_rows} original" if original_rows != "N/A" else None)
+                # Show automatic preview for single table
+                with st.expander("📊 Formatted Data Preview", expanded=True):
+                    _show_single_table_preview(df, table_name, raw_csv_data)
                 
-                with col2:
-                    st.metric("Columns", len(formatted_df.columns))
-                
-                with col3:
-                    clean_cols = [col for col in formatted_df.columns if not str(col).startswith('Unnamed:')]
-                    st.metric("Clean Columns", len(clean_cols))
-                
-                # Show column name improvements
-                st.markdown("**✨ Improved Column Names:**")
-                col_names_preview = ", ".join(formatted_df.columns[:5])
-                if len(formatted_df.columns) > 5:
-                    col_names_preview += f", ... (+{len(formatted_df.columns)-5} more)"
-                st.write(col_names_preview)
-                
-                # Show data preview
-                st.markdown("**📄 Data Preview (first 10 rows):**")
-                st.dataframe(formatted_df.head(10), use_container_width=True)
+                st.info("💾 **Formatted data is ready for AI analysis!** The cleaned dataset will be used for generating chart suggestions.")
+                return df, True
             
-            # Show save confirmation
-            st.info("💾 **Formatted data is ready for AI analysis!** The cleaned dataset will be used for generating chart suggestions.")
-            
-            return formatted_df, True
+            else:
+                # Multiple tables - store in session state and show selection interface
+                st.success(f"✅ **{len(dataframes_dict)} Tables Successfully Detected and Formatted!**")
+                
+                # Store tables in session state for persistence
+                st.session_state.detected_tables = dataframes_dict
+                
+                # Show multi-table selection component
+                selected_df, selected_name = multi_table_selection_component(dataframes_dict)
+                
+                if selected_df is not None:
+                    # Store selected table info in session state
+                    st.session_state.selected_table_name = selected_name
+                    st.info("💾 **Selected table is ready for AI analysis!** The chosen dataset will be used for generating chart suggestions.")
+                    return selected_df, True
+                else:
+                    st.warning("⏳ Please select a table to continue with analysis.")
+                    return None, False
                 
     except Exception as e:
         st.error(f"❌ Error during formatting: {str(e)}")
+        import traceback
+        if st.session_state.get('debug_mode', False):
+            st.exception(e)
         return None, False
+
+def _show_single_table_preview(df: pd.DataFrame, table_name: str, raw_csv_data: str):
+    """Show preview for a single formatted table"""
+    # Comparison metrics
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # Try to get original row count for comparison
+        try:
+            import io
+            original_df = pd.read_csv(io.StringIO(raw_csv_data))
+            original_rows = len(original_df)
+        except:
+            original_rows = "N/A"
+        
+        st.metric("Rows", f"{len(df)}", 
+                 delta=f"vs {original_rows} original" if original_rows != "N/A" else None)
+    
+    with col2:
+        st.metric("Columns", len(df.columns))
+    
+    with col3:
+        clean_cols = [col for col in df.columns if not str(col).startswith('Unnamed:')]
+        st.metric("Clean Columns", len(clean_cols))
+    
+    # Show column name improvements
+    if table_name != "main_table":
+        st.markdown(f"**📋 Table: {table_name}**")
+    
+    st.markdown("**✨ Improved Column Names:**")
+    col_names_preview = ", ".join(df.columns[:5])
+    if len(df.columns) > 5:
+        col_names_preview += f", ... (+{len(df.columns)-5} more)"
+    st.write(col_names_preview)
+    
+    # Show data preview
+    st.markdown("**📄 Data Preview (first 10 rows):**")
+    st.dataframe(df.head(10), use_container_width=True)
+
+def multi_table_selection_component(tables_dict: Dict[str, pd.DataFrame]) -> Tuple[Optional[pd.DataFrame], str]:
+    """
+    Component for selecting from multiple detected tables
+    Uses session state for persistence across interactions
+    
+    Args:
+        tables_dict: Dictionary of table_name -> DataFrame
+        
+    Returns:
+        Tuple of (selected_dataframe, selected_table_name)
+    """
+    st.subheader("📊 Multiple Tables Detected!")
+    st.markdown(f"**{len(tables_dict)} tables** were found in your file. Please select which table to use for analysis:")
+    
+    # Show table summaries
+    for i, (table_name, df) in enumerate(tables_dict.items(), 1):
+        with st.expander(f"📄 **Table {i}: {table_name}**", expanded=i==1):
+            
+            # Table metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Rows", f"{len(df):,}")
+            with col2:
+                st.metric("Columns", len(df.columns))
+            with col3:
+                missing_values = df.isnull().sum().sum()
+                st.metric("Missing Values", missing_values)
+            with col4:
+                st.metric("Memory", f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB")
+            
+            # Column names preview
+            st.markdown("**Column Names:**")
+            cols_preview = ", ".join(df.columns[:5])
+            if len(df.columns) > 5:
+                cols_preview += f", ... (+{len(df.columns)-5} more)"
+            st.write(cols_preview)
+            
+            # Data preview
+            st.markdown("**Data Preview:**")
+            try:
+                st.dataframe(df.head(5), use_container_width=True)
+            except Exception:
+                st.table(df.head(5))
+    
+    # Table selection with persistence
+    st.markdown("---")
+    st.markdown("**🎯 Select Table for Analysis:**")
+    
+    table_options = list(tables_dict.keys())
+    
+    # Get previously selected table if available
+    default_index = 0
+    if st.session_state.get('selected_table_name') in table_options:
+        default_index = table_options.index(st.session_state.selected_table_name)
+    
+    selected_table_name = st.selectbox(
+        "Choose the table you want to analyze:",
+        options=table_options,
+        index=default_index,
+        format_func=lambda x: f"{x} ({len(tables_dict[x])} rows × {len(tables_dict[x].columns)} cols)",
+        key="table_selector"
+    )
+    
+    if selected_table_name:
+        selected_df = tables_dict[selected_table_name]
+        
+        # Show selection confirmation
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            st.success(f"✅ **Selected:** {selected_table_name}")
+            st.write(f"This table has **{len(selected_df)} rows** and **{len(selected_df.columns)} columns**")
+        
+        with col2:
+            if st.button("📊 Use This Table", type="primary", use_container_width=True, key="confirm_table_selection"):
+                # Import DataProcessor here to avoid circular imports
+                import sys
+                from pathlib import Path
+                current_dir = Path(__file__).parent.parent
+                sys.path.append(str(current_dir))
+                from utils.data_processing import DataProcessor
+                
+                # Update session state
+                st.session_state.selected_table_name = selected_table_name
+                st.session_state.df = selected_df  # Store the selected DataFrame
+                st.session_state.df_context = DataProcessor.get_dataframe_context(selected_df)  # Update context too
+                st.session_state.table_selection_complete = True  # Mark selection as complete
+                st.success("🎉 Table selection confirmed!")
+                # Don't use st.rerun() - just return the selection
+                return selected_df, selected_table_name
+        
+        # If table was previously selected, return it automatically
+        if st.session_state.get('selected_table_name') == selected_table_name:
+            return selected_df, selected_table_name
+    
+    return None, ""

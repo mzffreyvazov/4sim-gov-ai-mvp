@@ -101,21 +101,31 @@ darlıq"
             
             # Import and initialize formatter
             from utils.ai_agents import CSVFormatter
+            from utils.data_processing import DataProcessor
             formatter = CSVFormatter(api_key=api_key)
             
-            # Format the CSV
-            formatted_csv = formatter.format_csv_data(sample_csv_data)
+            # Format the CSV (now returns Dict[str, str])
+            tables_dict = formatter.format_csv_data(sample_csv_data)
             
-            print("\nFormatted CSV Data:")
+            print(f"\nFormatted CSV Tables (detected {len(tables_dict)} table(s)):")
             print("-" * 50)
-            print(formatted_csv)
             
-            # Parse formatted CSV
-            formatted_df = DataProcessor.parse_formatted_csv_string(formatted_csv)
-            print(f"\nFormatted DataFrame shape: {formatted_df.shape}")
-            print(f"Formatted columns: {list(formatted_df.columns)}")
-            print("\nFormatted data preview:")
-            print(formatted_df.head())
+            # Parse tables into DataFrames
+            dataframes_dict = DataProcessor.parse_multiple_formatted_csv_strings(tables_dict)
+            
+            for i, (table_name, csv_data) in enumerate(tables_dict.items(), 1):
+                print(f"\n=== TABLE {i}: {table_name} ===")
+                print(csv_data)
+                
+                if table_name in dataframes_dict:
+                    df_formatted = dataframes_dict[table_name]
+                    print(f"\nDataFrame shape: {df_formatted.shape}")
+                    print(f"Columns: {list(df_formatted.columns)}")
+                    print("\nFirst 3 rows:")
+                    print(df_formatted.head(3))
+                else:
+                    print("Could not parse this table into DataFrame")
+                print("-" * 50)
             
         else:
             print("\nNo API key found in environment. Set GOOGLE_API_KEY to test AI formatting.")

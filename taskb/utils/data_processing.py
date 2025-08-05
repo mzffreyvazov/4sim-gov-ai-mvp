@@ -3,7 +3,8 @@ import chardet
 import io
 import tempfile
 import os
-from typing import Dict, Tuple, Optional, List
+import csv
+from typing import Dict, Tuple, Optional, List, Any
 
 class DataProcessor:
     """Handles file upload and DataFrame operations"""
@@ -109,6 +110,141 @@ class DataProcessor:
             return pd.read_csv(io.StringIO(formatted_csv_data))
         except Exception as e:
             raise ValueError(f"Could not parse formatted CSV data. Error: {e}")
+    
+    @staticmethod
+    def parse_multiple_formatted_csv_strings(tables_dict: Dict[str, str]) -> Dict[str, pd.DataFrame]:
+        """Parse multiple formatted CSV strings into DataFrames with robust error handling"""
+        dataframes = {}
+        
+        for table_name, csv_data in tables_dict.items():
+            try:
+                # First attempt: standard parsing
+                df = pd.read_csv(io.StringIO(csv_data))
+                if len(df) > 0 and len(df.columns) > 0:  # Valid DataFrame
+                    dataframes[table_name] = df
+                    continue
+                    
+            except Exception as e:
+                print(f"Warning: Could not parse table '{table_name}' with standard method: {e}")
+                
+                # Second attempt: More robust parsing with error handling
+                try:
+                    # Try with error_bad_lines=False to skip problematic rows
+                    df = pd.read_csv(
+                        io.StringIO(csv_data), 
+                        on_bad_lines='skip',  # Skip bad lines instead of failing
+                        engine='python',      # Use Python engine for better error handling
+                        quoting=1,           # Handle quotes properly
+                        skipinitialspace=True # Skip whitespace after delimiter
+                    )
+                    
+                    if len(df) > 0 and len(df.columns) > 0:
+                        print(f"Successfully parsed table '{table_name}' with robust method (some rows may have been skipped)")
+                        dataframes[table_name] = df
+                        continue
+                        
+                except Exception as e2:
+                    print(f"Warning: Could not parse table '{table_name}' even with robust method: {e2}")
+                    
+                    # Third attempt: Clean the CSV data manually
+                    try:
+                        cleaned_csv = DataProcessor._clean_csv_data(csv_data)
+                        df = pd.read_csv(io.StringIO(cleaned_csv))
+                        
+                        if len(df) > 0 and len(df.columns) > 0:
+                            print(f"Successfully parsed table '{table_name}' after manual cleaning")
+                            dataframes[table_name] = df
+                        else:
+                            print(f"Warning: Table '{table_name}' resulted in empty DataFrame after cleaning")
+                            
+                    except Exception as e3:
+                        print(f"Error: Failed to parse table '{table_name}' after all attempts: {e3}")
+                        continue
+        
+        return dataframes
+    
+    @staticmethod
+    def _clean_csv_data(csv_data: str) -> str:
+        """Clean CSV data to handle field count inconsistencies"""
+        lines = csv_data.strip().split('\n')
+        if not lines:
+            return csv_data
+            
+        # Get the header line (first non-empty line)
+        header_line = None
+        header_fields_count = 0
+        
+        for line in lines:
+            if line.strip():
+                header_line = line
+                # Count fields in header (accounting for quoted fields)
+                import csv
+                reader = csv.reader([line])
+                header_fields_count = len(next(reader))
+                break
+        
+        if not header_line:
+            return csv_data
+            
+        # Clean each line to match header field count
+        cleaned_lines = []
+        
+        for line in lines:
+            if not line.strip():
+                cleaned_lines.append(line)
+                continue
+                
+            try:
+                # Parse the line to count actual fields
+                import csv
+                reader = csv.reader([line])
+                fields = next(reader)
+                
+                # If field count matches, keep as is
+                if len(fields) == header_fields_count:
+                    cleaned_lines.append(line)
+                elif len(fields) > header_fields_count:
+                    # Too many fields - truncate to header count
+                    truncated_fields = fields[:header_fields_count]
+                    # Re-encode as CSV line
+                    import io
+                    output = io.StringIO()
+                    writer = csv.writer(output)
+                    writer.writerow(truncated_fields)
+                    cleaned_lines.append(output.getvalue().strip())
+                else:
+                    # Too few fields - pad with empty strings
+                    padded_fields = fields + [''] * (header_fields_count - len(fields))
+                    # Re-encode as CSV line
+                    import io
+                    output = io.StringIO()
+                    writer = csv.writer(output)
+                    writer.writerow(padded_fields)
+                    cleaned_lines.append(output.getvalue().strip())
+                    
+            except Exception:
+                # If line parsing fails, try to salvage by basic field splitting
+                fields = line.split(',')
+                if len(fields) > header_fields_count:
+                    fields = fields[:header_fields_count]
+                elif len(fields) < header_fields_count:
+                    fields.extend([''] * (header_fields_count - len(fields)))
+                cleaned_lines.append(','.join(fields))
+        
+        return '\n'.join(cleaned_lines)
+    
+    @staticmethod
+    def get_table_summary(df: pd.DataFrame, table_name: str) -> Dict[str, Any]:
+        """Get summary information for a table"""
+        return {
+            "name": table_name,
+            "rows": len(df),
+            "columns": len(df.columns),
+            "column_names": list(df.columns),
+            "preview": df.head(3).to_dict('records'),
+            "missing_values": df.isnull().sum().sum(),
+            "memory_usage": f"{df.memory_usage(deep=True).sum() / 1024:.1f} KB"
+        }
     
     @staticmethod
     def detect_if_needs_formatting(df: pd.DataFrame) -> bool:

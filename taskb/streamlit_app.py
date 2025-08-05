@@ -127,6 +127,9 @@ def initialize_session_state():
         'raw_csv_data': None,
         'original_filename': None,
         'gemini_api_key': '',
+        'detected_tables': {},  # Store all detected tables
+        'selected_table_name': None,  # Track which table was selected
+        'table_selection_complete': False,  # Flag to track if table selection is done
     }
     
     for var, default_value in session_vars.items():
@@ -271,30 +274,67 @@ def handle_data_upload():
             
             # CSV Formatting Component
             st.markdown("---")
-            from components.file_upload import csv_formatting_component
             
             # Get API key from session state or sidebar
             api_key = st.session_state.get('gemini_api_key', '')
             
-            formatted_df, was_formatted = csv_formatting_component(
-                df=df,
-                raw_csv_data=raw_csv_data,
-                api_key=api_key,
-                filename=uploaded_file.name
-            )
-            
-            # Update session state if data was formatted
-            if was_formatted and formatted_df is not None:
-                st.session_state.df = formatted_df
-                st.session_state.df_context = DataProcessor.get_dataframe_context(formatted_df)
+            # Check if we have previously detected tables and user has selected one
+            if (st.session_state.get('detected_tables') and 
+                st.session_state.get('selected_table_name') and 
+                st.session_state.get('df') is not None and 
+                st.session_state.get('table_selection_complete', False)):
                 
-                # Show updated preview
-                st.markdown("---")
-                st.subheader("📊 Updated Dataset Preview")
-                display_dataframe_preview(formatted_df)
-            
-            # Next steps hint
-            st.info("✨ **Next Step:** Go to the 'AI Analysis' tab to generate chart suggestions!")
+                # Show info about previously selected table
+                st.success(f"✅ **Table Selection Complete:** {st.session_state.selected_table_name}")
+                st.info("💾 **Selected table is ready for AI analysis!** Go to the 'AI Analysis' tab to generate chart suggestions.")
+                
+                # Show current table preview
+                st.markdown("**📊 Selected Table Preview:**")
+                display_dataframe_preview(st.session_state.df)
+                
+                # Option to change table selection
+                col1, col2 = st.columns([3, 1])
+                with col2:
+                    if st.button("🔄 Change Table", help="Select a different table from the detected tables"):
+                        # Reset completion flag temporarily
+                        st.session_state.table_selection_complete = False
+                        from components.file_upload import multi_table_selection_component
+                        selected_df, selected_name = multi_table_selection_component(st.session_state.detected_tables)
+                        if selected_df is not None:
+                            st.session_state.df = selected_df
+                            st.session_state.selected_table_name = selected_name
+                            st.session_state.df_context = DataProcessor.get_dataframe_context(selected_df)
+                            st.session_state.table_selection_complete = True
+                            st.rerun()
+                
+                # Set variables for the rest of the logic
+                formatted_df = st.session_state.df
+                was_formatted = True
+                
+            else:
+                # Normal CSV formatting flow
+                from components.file_upload import csv_formatting_component
+                
+                formatted_df, was_formatted = csv_formatting_component(
+                    df=df,
+                    raw_csv_data=raw_csv_data,
+                    api_key=api_key,
+                    filename=uploaded_file.name
+                )
+                
+                # Update session state if data was formatted
+                if was_formatted and formatted_df is not None:
+                    st.session_state.df = formatted_df
+                    st.session_state.df_context = DataProcessor.get_dataframe_context(formatted_df)
+                    
+                    # Show updated preview only if not already shown
+                    if not st.session_state.get('detected_tables'):
+                        st.markdown("---")
+                        st.subheader("📊 Updated Dataset Preview")
+                        display_dataframe_preview(formatted_df)
+                    
+                    # Next steps hint
+                    st.info("✨ **Next Step:** Go to the 'AI Analysis' tab to generate chart suggestions!")
             
         except Exception as e:
             st.error(f"❌ Error processing file: {str(e)}")
